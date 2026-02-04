@@ -1,2 +1,5 @@
-export const TESTNET_HELLO_WORLD_PACKAGE_ID = "0x4e1cf62ae7d377c7404ac2a617598754a548a5de6a599f236a53603d5674d8b8";
+// Package ID của Move module đã được publish trên Sui Testnet
+// Module: hello_world::gifting
+export const TESTNET_HELLO_WORLD_PACKAGE_ID = "0x815ec36065c9d4199adbe48ff152581668ffe0d8edcb344585aa1839f3e9c15f";
+
 
