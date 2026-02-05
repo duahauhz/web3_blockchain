@@ -9,8 +9,19 @@ export function GoogleCallback() {
 
     if (idToken && window.opener) {
       try {
-        // Decode JWT (basic parsing, just split by dots)
-        const payload = JSON.parse(atob(idToken.split('.')[1]));
+        // Decode JWT with proper UTF-8 handling
+        const base64Url = idToken.split('.')[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const jsonPayload = decodeURIComponent(
+          atob(base64)
+            .split('')
+            .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+            .join('')
+        );
+        const payload = JSON.parse(jsonPayload);
+        
+        console.log('✅ Decoded payload with UTF-8:', payload);
+        console.log('✅ User name:', payload.name);
         
         const user = {
           email: payload.email,

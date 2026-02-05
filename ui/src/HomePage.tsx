@@ -1,8 +1,9 @@
 import { ConnectButton, useCurrentAccount } from "@mysten/dapp-kit";
 import { Box, Button, Container, Flex, Heading, Text } from "@radix-ui/themes";
 import { motion } from "framer-motion";
-import { Gift, Sparkles, Zap, Shield, Users, TrendingUp, Github, Twitter, Mail } from "lucide-react";
+import { Gift, Sparkles, Zap, Shield, Users, TrendingUp, Github, Twitter, Mail, LogOut, LogIn } from "lucide-react";
 import { NotificationBell } from "./NotificationBell";
+import { useAuth } from "./contexts/AuthContext";
 
 interface HomePageProps {
   onNavigate: (page: 'create' | 'claim' | 'create-lixi' | 'claim-lixi' | 'lixi-manage' | 'transactions') => void;
@@ -10,6 +11,7 @@ interface HomePageProps {
 
 export function HomePage({ onNavigate }: HomePageProps) {
   const currentAccount = useCurrentAccount();
+  const { user, isAuthenticated, login, logout } = useAuth();
 
   return (
     <Box style={{ 
@@ -140,6 +142,60 @@ export function HomePage({ onNavigate }: HomePageProps) {
               </Button>
             </>
           )}
+          
+          {/* Google Login/User Info */}
+          {isAuthenticated && user ? (
+            <Flex align="center" gap="2" style={{
+              background: "rgba(255, 107, 53, 0.1)",
+              padding: "0.5rem 1rem",
+              borderRadius: "12px",
+              border: "2px solid rgba(255, 107, 53, 0.3)",
+            }}>
+              <img 
+                src={user.picture} 
+                alt={user.name}
+                style={{
+                  width: "32px",
+                  height: "32px",
+                  borderRadius: "50%",
+                  border: "2px solid #ff6b35",
+                }}
+              />
+              <Box>
+                <Text size="1" style={{ color: "#999", display: "block", lineHeight: "1.2" }}>
+                  {user.email}
+                </Text>
+              </Box>
+              <Button
+                variant="ghost"
+                size="1"
+                onClick={logout}
+                style={{
+                  cursor: "pointer",
+                  color: "#ff6b35",
+                }}
+              >
+                <LogOut size={16} />
+              </Button>
+            </Flex>
+          ) : (
+            <Button
+              size="3"
+              onClick={login}
+              style={{
+                background: "linear-gradient(135deg, #ff6b35 0%, #f7931e 100%)",
+                color: "white",
+                border: "none",
+                fontWeight: 600,
+                cursor: "pointer",
+                boxShadow: "0 4px 15px rgba(255, 107, 53, 0.3)",
+              }}
+            >
+              <LogIn size={18} />
+              Đăng nhập Google
+            </Button>
+          )}
+          
           <ConnectButton />
         </Flex>
       </Flex>

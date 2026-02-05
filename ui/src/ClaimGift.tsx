@@ -14,6 +14,7 @@ import { ArrowLeft, Sparkles } from "lucide-react";
 import ClipLoader from "react-spinners/ClipLoader";
 import confetti from "canvas-confetti";
 import { useAuth } from "./contexts/AuthContext";
+import { isWalletLinkedToEmail, getLinkedWallet, linkWalletToEmail } from "./utils/walletMapping";
 
 interface ClaimGiftProps {
   onBack: () => void;
@@ -24,22 +25,51 @@ export function ClaimGift({ onBack }: ClaimGiftProps) {
   const suiClient = useSuiClient();
   const currentAccount = useCurrentAccount();
   const { mutate: signAndExecute } = useSignAndExecuteTransaction();
-  const { user } = useAuth();
+  const { user, login } = useAuth();
 
   const [giftId, setGiftId] = useState("");
   const [searchedGiftId, setSearchedGiftId] = useState("");
   const [waitingForTxn, setWaitingForTxn] = useState(false);
   const [isOpened, setIsOpened] = useState(false);
   const [error, setError] = useState("");
+  const [showVerification, setShowVerification] = useState(false);
+  const [hasCheckedUrl, setHasCheckedUrl] = useState(false); // Track nếu đã check URL
 
-  // Tự động điền Gift ID từ URL query parameter
+  // Tự động điền Gift ID từ URL query parameter (hash routing)
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const idFromUrl = params.get('id');
-    if (idFromUrl) {
-      setGiftId(idFromUrl);
-      setSearchedGiftId(idFromUrl);
-    }
+    const syncFromHash = () => {
+      const hash = window.location.hash || "";
+      console.log("🔍 ClaimGift syncFromHash - Full hash:", hash);
+      
+      // Parse query từ hash: /#/claim?id=xxx&t=123
+      const hashQuery = hash.includes("?") ? hash.split("?")[1] : "";
+      console.log("🔍 ClaimGift syncFromHash - Query part:", hashQuery);
+      
+      const params = new URLSearchParams(hashQuery);
+      const idFromUrl = params.get("id");
+      console.log("🔍 ClaimGift syncFromHash - Gift ID:", idFromUrl);
+
+      if (idFromUrl) {
+        console.log("✅ Found Gift ID, showing verification screen");
+        setGiftId(idFromUrl);
+        setSearchedGiftId(idFromUrl);
+        setShowVerification(true);
+      } else {
+        console.log("❌ No Gift ID found, showing input form");
+        setShowVerification(false);
+        setSearchedGiftId("");
+        setGiftId("");
+      }
+
+      setHasCheckedUrl(true);
+    };
+
+    syncFromHash();
+    window.addEventListener("hashchange", syncFromHash);
+
+    return () => {
+      window.removeEventListener("hashchange", syncFromHash);
+    };
   }, []);
 
   const { data, isPending, error: queryError } = useSuiClientQuery(
@@ -95,13 +125,18 @@ export function ClaimGift({ onBack }: ClaimGiftProps) {
     }
     setError("");
     setSearchedGiftId(giftId);
+    // Hiển thị trang xác nhận thay vì mở quà ngay
+    setShowVerification(true);
   };
 
   const handleOpenGift = () => {
     if (!searchedGiftId) return;
 
-    if (giftData?.recipient_email && !user?.email) {
-      setError("Vui lòng đăng nhập để xác nhận nhận quà!");
+    // Kiểm tra xem quà có yêu cầu email không
+    const requiresEmail = giftData?.recipient_email && giftData.recipient_email !== "legacy@recipient.com";
+    
+    if (requiresEmail && !user?.email) {
+      setError("⚠️ Quà này yêu cầu đăng nhập Google để xác thực email!");
       return;
     }
 
@@ -110,8 +145,8 @@ export function ClaimGift({ onBack }: ClaimGiftProps) {
 
     const tx = new Transaction();
 
-    if (giftData?.recipient_email) {
-      const recipientEmailProof = user?.email || "legacy@recipient.com";
+    if (requiresEmail) {
+      const recipientEmailProof = user?.email || "";
       tx.moveCall({
         target: `${packageId}::gifting::open_and_claim_with_zklogin`,
         arguments: [
@@ -157,13 +192,16 @@ export function ClaimGift({ onBack }: ClaimGiftProps) {
 
   const handleRejectGift = () => {
     if (!searchedGiftId) return;
-    if (!giftData?.recipient_email) {
+    
+    const requiresEmail = giftData?.recipient_email && giftData.recipient_email !== "legacy@recipient.com";
+    
+    if (!requiresEmail) {
       setError("Không thể hoàn quà legacy. Vui lòng nhận quà.");
       return;
     }
 
     if (!user?.email) {
-      setError("Vui lòng đăng nhập để hoàn quà!");
+      setError("⚠️ Vui lòng đăng nhập Google để hoàn quà!");
       return;
     }
 
@@ -295,50 +333,93 @@ export function ClaimGift({ onBack }: ClaimGiftProps) {
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.5 }}
         >
-          <Button
-            variant="soft"
-            size="3"
-            onClick={onBack}
-            style={{
-              color: "#ff6b35",
-              background: "rgba(255, 107, 53, 0.1)",
-              marginBottom: "2rem",
-              fontWeight: 600,
-            }}
-          >
-            <ArrowLeft size={20} />
-            Quay lại
-          </Button>
+          <Flex justify="between" align="center" mb="4">
+            <Button
+              variant="soft"
+              size="3"
+              onClick={onBack}
+              style={{
+                color: "#ff6b35",
+                background: "rgba(255, 107, 53, 0.1)",
+                fontWeight: 600,
+              }}
+            >
+              <ArrowLeft size={20} />
+              Quay lại
+            </Button>
+            
+            {/* Hiển thị trạng thái đăng nhập */}
+            {user ? (
+              <Flex align="center" gap="2" style={{
+                background: "rgba(255, 107, 53, 0.1)",
+                padding: "0.5rem 1rem",
+                borderRadius: "12px",
+                border: "2px solid rgba(255, 107, 53, 0.3)",
+              }}>
+                <img 
+                  src={user.picture} 
+                  alt={user.name}
+                  style={{
+                    width: "28px",
+                    height: "28px",
+                    borderRadius: "50%",
+                    border: "2px solid #ff6b35",
+                  }}
+                />
+                <Box>
+                  <Text size="1" style={{ color: "#ff6b35", lineHeight: "1.2" }}>
+                    {user.email}
+                  </Text>
+                </Box>
+              </Flex>
+            ) : (
+              giftData?.recipient_email && giftData.recipient_email !== "legacy@recipient.com" && (
+                <Button
+                  size="2"
+                  onClick={login}
+                  style={{
+                    background: "linear-gradient(135deg, #ff6b35 0%, #f7931e 100%)",
+                    color: "white",
+                    cursor: "pointer",
+                  }}
+                >
+                  🔑 Đăng nhập Google
+                </Button>
+              )
+            )}
+          </Flex>
         </motion.div>
 
         <Flex direction="column" align="center" gap="6">
-          {/* Header */}
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            style={{ textAlign: "center" }}
-          >
-            <Box style={{
-              display: "inline-block",
-              background: "linear-gradient(135deg, #ff6b35 0%, #f7931e 100%)",
-              padding: "1.5rem",
-              borderRadius: "25px",
-              marginBottom: "1rem",
-              boxShadow: "0 15px 50px rgba(255, 107, 53, 0.4)",
-            }}>
-              <Sparkles size={56} color="white" />
-            </Box>
-            <Heading size="8" mb="2" style={{ color: "#ff6b35", fontWeight: 900 }}>
-              Nhận quà tặng 🎁
-            </Heading>
-            <Text size="3" style={{ color: "#666", fontWeight: 500 }}>
-              Nhập Gift ID để mở hộp quà bất ngờ của bạn
-            </Text>
-          </motion.div>
+          {/* Header - CHỈ HIỂN THỊ KHI KHÔNG CÓ GIFT ID TỪ URL */}
+          {hasCheckedUrl && !searchedGiftId && (
+            <motion.div
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6 }}
+              style={{ textAlign: "center" }}
+            >
+              <Box style={{
+                display: "inline-block",
+                background: "linear-gradient(135deg, #ff6b35 0%, #f7931e 100%)",
+                padding: "1.5rem",
+                borderRadius: "25px",
+                marginBottom: "1rem",
+                boxShadow: "0 15px 50px rgba(255, 107, 53, 0.4)",
+              }}>
+                <Sparkles size={56} color="white" />
+              </Box>
+              <Heading size="8" mb="2" style={{ color: "#ff6b35", fontWeight: 900 }}>
+                Nhận quà tặng 🎁
+              </Heading>
+              <Text size="3" style={{ color: "#666", fontWeight: 500 }}>
+                Nhập Gift ID để mở hộp quà bất ngờ của bạn
+              </Text>
+            </motion.div>
+          )}
 
-          {/* Search Box */}
-          {!searchedGiftId && (
+          {/* Search Box - CHỈ HIỂN THỊ KHI KHÔNG CÓ GIFT ID TỪ URL */}
+          {hasCheckedUrl && !searchedGiftId && (
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -383,6 +464,22 @@ export function ClaimGift({ onBack }: ClaimGiftProps) {
                       <Text size="2" style={{ color: "#d00", fontWeight: 600 }}>
                         ⚠️ {error}
                       </Text>
+                      {error.includes("đăng nhập Google") && (
+                        <Button
+                          size="3"
+                          onClick={login}
+                          style={{
+                            marginTop: "1rem",
+                            background: "linear-gradient(135deg, #ff6b35 0%, #f7931e 100%)",
+                            color: "white",
+                            border: "none",
+                            cursor: "pointer",
+                            width: "100%",
+                          }}
+                        >
+                          🔑 Đăng nhập Google ngay
+                        </Button>
+                      )}
                     </Box>
                   )}
 
@@ -408,15 +505,34 @@ export function ClaimGift({ onBack }: ClaimGiftProps) {
             </motion.div>
           )}
 
-          {/* Gift Box Display */}
-          {searchedGiftId && !isOpened && (
+          {/* Loading State - Đang check URL */}
+          {!hasCheckedUrl && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              style={{ 
+                width: "100%", 
+                maxWidth: "400px",
+                textAlign: "center",
+                padding: "3rem"
+              }}
+            >
+              <ClipLoader size={50} color="#ff6b35" />
+              <Text size="3" style={{ color: "#666", marginTop: "1rem", display: "block" }}>
+                Đang tải thông tin quà...
+              </Text>
+            </motion.div>
+          )}
+
+          {/* Verification Screen - Xác nhận tài khoản */}
+          {hasCheckedUrl && searchedGiftId && !isOpened && showVerification && (
             <motion.div
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.6 }}
               style={{ 
                 width: "100%", 
-                maxWidth: "600px",
+                maxWidth: "700px",
                 boxShadow: "0 20px 60px rgba(0,0,0,0.3)"
               }}
             >
@@ -444,6 +560,7 @@ export function ClaimGift({ onBack }: ClaimGiftProps) {
                         setSearchedGiftId("");
                         setGiftId("");
                         setError("");
+                        setShowVerification(false);
                       }}
                       style={{ marginTop: "1rem" }}
                     >
@@ -451,26 +568,196 @@ export function ClaimGift({ onBack }: ClaimGiftProps) {
                     </Button>
                   </Box>
                 ) : (
-                  <Flex direction="column" align="center" gap="5">
-                    {/* Gift Info */}
-                    <Box style={{ textAlign: "center", width: "100%" }}>
-                      <Text size="2" style={{ color: "#666", marginBottom: "0.8rem", display: "block", fontWeight: 500 }}>
-                        Từ: {giftData.sender.slice(0, 6)}...{giftData.sender.slice(-4)}
+                  <Flex direction="column" gap="6">
+                    {/* Header */}
+                    <Box style={{ textAlign: "center" }}>
+                      <Text size="7" weight="bold" style={{ color: "#ff6b35", display: "block", marginBottom: "0.5rem" }}>
+                        🔐 Xác nhận tài khoản
                       </Text>
-                      <Box
-                        p="4"
-                        mb="4"
-                        style={{
-                          background: "rgba(255, 107, 53, 0.08)",
-                          borderRadius: "15px",
-                          border: "2px dashed rgba(255, 107, 53, 0.3)",
-                        }}
-                      >
-                        <Text size="3" style={{ color: "#ff6b35", fontStyle: "italic", fontWeight: 600 }}>
+                      <Text size="3" style={{ color: "#666" }}>
+                        Vui lòng kiểm tra thông tin trước khi nhận quà
+                      </Text>
+                    </Box>
+
+                    {/* Gift Info Preview */}
+                    <Box p="4" style={{
+                      background: "rgba(255, 107, 53, 0.08)",
+                      borderRadius: "15px",
+                      border: "2px dashed rgba(255, 107, 53, 0.3)",
+                    }}>
+                      <Text size="2" weight="bold" style={{ color: "#ff6b35", display: "block", marginBottom: "0.5rem" }}>
+                        📦 Thông tin quà:
+                      </Text>
+                      <Flex direction="column" gap="2">
+                        <Text size="2" style={{ color: "#666" }}>
+                          Từ: {giftData.sender.slice(0, 6)}...{giftData.sender.slice(-4)}
+                        </Text>
+                        <Text size="2" style={{ color: "#666" }}>
+                          Số tiền: <strong style={{ color: "#ff6b35" }}>{suiAmount} SUI</strong>
+                        </Text>
+                        <Text size="2" style={{ color: "#666", fontStyle: "italic" }}>
                           "{giftData.message}"
                         </Text>
-                      </Box>
+                      </Flex>
                     </Box>
+
+                    {/* Verification Checks */}
+                    <Flex direction="column" gap="4">
+                      {/* Google Account Check */}
+                      {giftData.recipient_email && giftData.recipient_email !== "legacy@recipient.com" && (
+                        <Box p="4" style={{
+                          background: user?.email ? "#f0fdf4" : "#fef2f2",
+                          borderRadius: "12px",
+                          border: `2px solid ${user?.email ? "#86efac" : "#fecaca"}`,
+                        }}>
+                          <Flex align="center" gap="3">
+                            <Text size="6">
+                              {user?.email ? "✅" : "❌"}
+                            </Text>
+                            <Box style={{ flex: 1 }}>
+                              <Text size="2" weight="bold" style={{ 
+                                color: user?.email ? "#16a34a" : "#dc2626",
+                                display: "block",
+                                marginBottom: "0.25rem"
+                              }}>
+                                Tài khoản Google
+                              </Text>
+                              {user?.email ? (
+                                <Flex direction="column" gap="1">
+                                  <Text size="2" style={{ color: "#15803d" }}>
+                                    {user.email}
+                                  </Text>
+                                  {user.email === giftData.recipient_email ? (
+                                    <Text size="1" style={{ color: "#16a34a", fontWeight: 600 }}>
+                                      ✓ Email khớp với người nhận
+                                    </Text>
+                                  ) : (
+                                    <Text size="1" style={{ color: "#dc2626", fontWeight: 600 }}>
+                                      ⚠️ Email không khớp! Yêu cầu: {giftData.recipient_email}
+                                    </Text>
+                                  )}
+                                </Flex>
+                              ) : (
+                                <Button
+                                  size="2"
+                                  onClick={login}
+                                  style={{
+                                    background: "linear-gradient(135deg, #ff6b35 0%, #f7931e 100%)",
+                                    color: "white",
+                                    cursor: "pointer",
+                                    marginTop: "0.5rem"
+                                  }}
+                                >
+                                  🔑 Đăng nhập Google
+                                </Button>
+                              )}
+                            </Box>
+                          </Flex>
+                        </Box>
+                      )}
+
+                      {/* Wallet Check - Kiểm tra wallet có khớp với Google không */}
+                      {(() => {
+                        const requiresEmail = giftData.recipient_email && giftData.recipient_email !== "legacy@recipient.com";
+                        const userLoggedIn = !!user?.email;
+                        const walletConnected = !!currentAccount;
+                        
+                        let walletStatus: 'not_connected' | 'not_linked' | 'wrong_wallet' | 'verified' = 'not_connected';
+                        let linkedWallet: string | null = null;
+                        
+                        if (requiresEmail && userLoggedIn && walletConnected) {
+                          linkedWallet = getLinkedWallet(user.email);
+                          
+                          if (!linkedWallet) {
+                            // Chưa có mapping, tự động link
+                            linkWalletToEmail(user.email, currentAccount.address);
+                            walletStatus = 'verified';
+                          } else if (linkedWallet.toLowerCase() === currentAccount.address.toLowerCase()) {
+                            walletStatus = 'verified';
+                          } else {
+                            walletStatus = 'wrong_wallet';
+                          }
+                        } else if (!walletConnected) {
+                          walletStatus = 'not_connected';
+                        } else if (requiresEmail && !userLoggedIn) {
+                          walletStatus = 'not_linked';
+                        } else {
+                          walletStatus = 'verified';
+                        }
+
+                        const isError = walletStatus === 'not_connected' || walletStatus === 'wrong_wallet';
+
+                        return (
+                          <Box p="4" style={{
+                            background: walletStatus === 'verified' ? "#f0fdf4" : (isError ? "#fef2f2" : "#fef3c7"),
+                            borderRadius: "12px",
+                            border: `2px solid ${walletStatus === 'verified' ? "#86efac" : (isError ? "#fecaca" : "#fbbf24")}`,
+                          }}>
+                            <Flex align="center" gap="3">
+                              <Text size="6">
+                                {walletStatus === 'verified' ? "✅" : "❌"}
+                              </Text>
+                              <Box style={{ flex: 1 }}>
+                                <Text size="2" weight="bold" style={{ 
+                                  color: walletStatus === 'verified' ? "#16a34a" : (isError ? "#dc2626" : "#b45309"),
+                                  display: "block",
+                                  marginBottom: "0.25rem"
+                                }}>
+                                  Ví Sui
+                                </Text>
+                                
+                                {walletStatus === 'not_connected' && (
+                                  <Text size="2" style={{ color: "#991b1b" }}>
+                                    Vui lòng kết nối ví ở góc trên phải
+                                  </Text>
+                                )}
+                                
+                                {walletStatus === 'not_linked' && currentAccount && (
+                                  <Flex direction="column" gap="1">
+                                    <Text size="2" style={{ color: "#b45309" }}>
+                                      {currentAccount.address.slice(0, 10)}...{currentAccount.address.slice(-8)}
+                                    </Text>
+                                    <Text size="1" style={{ color: "#b45309" }}>
+                                      Vui lòng đăng nhập Google trước
+                                    </Text>
+                                  </Flex>
+                                )}
+                                
+                                {walletStatus === 'wrong_wallet' && currentAccount && (
+                                  <Flex direction="column" gap="1">
+                                    <Text size="2" style={{ color: "#dc2626", fontWeight: 600 }}>
+                                      ⚠️ Sai ví! Ví này không khớp với tài khoản Google
+                                    </Text>
+                                    <Text size="1" style={{ color: "#991b1b" }}>
+                                      Ví hiện tại: {currentAccount.address.slice(0, 10)}...{currentAccount.address.slice(-8)}
+                                    </Text>
+                                    <Text size="1" style={{ color: "#991b1b" }}>
+                                      Ví đã liên kết: {linkedWallet?.slice(0, 10)}...{linkedWallet?.slice(-8)}
+                                    </Text>
+                                    <Text size="1" style={{ color: "#dc2626", fontWeight: 600, marginTop: "0.5rem" }}>
+                                      👉 Vui lòng kết nối đúng ví đã liên kết với {user?.email}
+                                    </Text>
+                                  </Flex>
+                                )}
+                                
+                                {walletStatus === 'verified' && currentAccount && (
+                                  <Flex direction="column" gap="1">
+                                    <Text size="2" style={{ color: "#15803d" }}>
+                                      {currentAccount.address.slice(0, 10)}...{currentAccount.address.slice(-8)}
+                                    </Text>
+                                    {requiresEmail && user?.email && (
+                                      <Text size="1" style={{ color: "#16a34a", fontWeight: 600 }}>
+                                        ✓ Ví đã liên kết với {user.email}
+                                      </Text>
+                                    )}
+                                  </Flex>
+                                )}
+                              </Box>
+                            </Flex>
+                          </Box>
+                        );
+                      })()}
+                    </Flex>
 
                     {error && (
                       <Box
@@ -488,66 +775,106 @@ export function ClaimGift({ onBack }: ClaimGiftProps) {
                       </Box>
                     )}
 
-                    {/* Open Button */}
-                    <Flex direction="column" gap="2" style={{ width: "100%" }}>
-                      <motion.div
-                        whileHover={{ scale: 1.05, y: -3 }}
-                        whileTap={{ scale: 0.95 }}
-                        style={{ width: "100%" }}
-                      >
-                        <Button
-                          size="4"
-                          onClick={handleOpenGift}
-                          disabled={waitingForTxn}
-                          style={{
-                            background: waitingForTxn 
-                              ? "#ccc"
-                              : "linear-gradient(135deg, #ff6b35 0%, #f7931e 100%)",
-                            color: "white",
-                            padding: "2rem 3rem",
-                            fontSize: "1.3rem",
-                            fontWeight: 900,
-                            borderRadius: "20px",
-                            cursor: waitingForTxn ? "not-allowed" : "pointer",
-                            border: "none",
-                            width: "100%",
-                            boxShadow: "0 20px 50px rgba(255, 107, 53, 0.5)",
-                            letterSpacing: "0.5px",
-                          }}
-                        >
-                          {waitingForTxn ? (
-                            <Flex align="center" justify="center" gap="2">
-                              <ClipLoader size={24} color="white" />
-                              Đang mở quà...
-                            </Flex>
-                          ) : (
-                            <motion.span
-                              animate={{
-                                scale: [1, 1.05, 1],
-                              }}
-                              transition={{
-                                duration: 1,
-                                repeat: Infinity,
+                    {/* Action Buttons */}
+                    {(() => {
+                      const requiresEmail = giftData.recipient_email && giftData.recipient_email !== "legacy@recipient.com";
+                      const emailVerified = !requiresEmail || (user?.email === giftData.recipient_email);
+                      const walletConnected = !!currentAccount;
+                      
+                      // Kiểm tra wallet có khớp với Google không
+                      let walletVerified = true;
+                      if (requiresEmail && user?.email && currentAccount) {
+                        walletVerified = isWalletLinkedToEmail(user.email, currentAccount.address);
+                      }
+                      
+                      const canProceed = emailVerified && walletConnected && walletVerified;
+
+                      return (
+                        <Flex direction="column" gap="3">
+                          {/* Thông báo trạng thái */}
+                          {!canProceed && (
+                            <Box p="3" style={{
+                              background: "#fef3c7",
+                              borderRadius: "12px",
+                              border: "2px solid #fbbf24",
+                              textAlign: "center"
+                            }}>
+                              <Text size="2" weight="bold" style={{ color: "#b45309" }}>
+                                ⚠️ Vui lòng hoàn thành các bước xác nhận ở trên
+                              </Text>
+                            </Box>
+                          )}
+
+                          {/* Nút chấp nhận */}
+                          <motion.div
+                            whileHover={canProceed ? { scale: 1.02, y: -2 } : {}}
+                            whileTap={canProceed ? { scale: 0.98 } : {}}
+                          >
+                            <Button
+                              size="4"
+                              onClick={handleOpenGift}
+                              disabled={waitingForTxn || !canProceed}
+                              style={{
+                                background: canProceed && !waitingForTxn
+                                  ? "linear-gradient(135deg, #ff6b35 0%, #f7931e 100%)"
+                                  : "#ccc",
+                                color: "white",
+                                padding: "1.5rem 3rem",
+                                fontSize: "1.2rem",
+                                fontWeight: 800,
+                                borderRadius: "15px",
+                                cursor: canProceed && !waitingForTxn ? "pointer" : "not-allowed",
+                                border: "none",
+                                width: "100%",
+                                boxShadow: canProceed ? "0 10px 30px rgba(255, 107, 53, 0.4)" : "none",
                               }}
                             >
-                              🎉 MỞ QUÀ NGAY!
-                            </motion.span>
-                          )}
-                        </Button>
-                      </motion.div>
-                      <Button
-                        onClick={handleRejectGift}
-                        disabled={waitingForTxn || !canReject}
-                        size="3"
-                        variant="soft"
-                        style={{
-                          borderColor: "rgba(255, 107, 53, 0.4)",
-                          color: "#ff6b35",
-                        }}
-                      >
-                        Hoàn lại người gửi
-                      </Button>
-                    </Flex>
+                              {waitingForTxn ? (
+                                <Flex align="center" justify="center" gap="2">
+                                  <ClipLoader size={20} color="white" />
+                                  Đang xử lý...
+                                </Flex>
+                              ) : (
+                                "🎁 Chấp nhận nhận quà"
+                              )}
+                            </Button>
+                          </motion.div>
+
+                          {/* Nút từ chối */}
+                          <Button
+                            size="3"
+                            variant="soft"
+                            onClick={handleRejectGift}
+                            disabled={waitingForTxn || !canReject || !canProceed}
+                            style={{
+                              borderColor: "rgba(255, 107, 53, 0.4)",
+                              color: "#ff6b35",
+                              cursor: canReject && canProceed && !waitingForTxn ? "pointer" : "not-allowed",
+                            }}
+                          >
+                            ❌ Từ chối và hoàn lại
+                          </Button>
+
+                          {/* Nút quay lại */}
+                          <Button
+                            size="2"
+                            variant="ghost"
+                            onClick={() => {
+                              setShowVerification(false);
+                              setSearchedGiftId("");
+                              setGiftId("");
+                              setError("");
+                            }}
+                            style={{
+                              color: "#666",
+                              cursor: "pointer",
+                            }}
+                          >
+                            ← Quay lại
+                          </Button>
+                        </Flex>
+                      );
+                    })()}
                   </Flex>
                 )}
               </Box>

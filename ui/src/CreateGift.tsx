@@ -9,6 +9,7 @@ import ClipLoader from "react-spinners/ClipLoader";
 import { useAuth } from "./contexts/AuthContext";
 import { useNotifications } from "./contexts/NotificationContext";
 import toast from "react-hot-toast";
+import { linkWalletToEmail } from "./utils/walletMapping";
 
 interface CreateGiftProps {
   onBack: () => void;
@@ -46,6 +47,11 @@ export function CreateGift({ onBack, onCreated }: CreateGiftProps) {
     if (isNaN(amountNum) || amountNum <= 0) {
       setError("Số lượng SUI không hợp lệ!");
       return;
+    }
+    
+    // Tự động link wallet với Google email khi tạo quà
+    if (user?.email && currentAccount) {
+      linkWalletToEmail(user.email, currentAccount.address);
     }
 
     setError("");
@@ -395,9 +401,14 @@ export function CreateGift({ onBack, onCreated }: CreateGiftProps) {
                       background: "rgba(255, 255, 255, 0.95)",
                     }}
                   />
-                  <Text size="2" style={{ color: "#999", marginTop: "0.5rem", display: "block" }}>
-                    💡 Người nhận cần đăng nhập để xác nhận nhận/hoàn quà.
-                  </Text>
+                    <Text size="2" style={{ color: "#999", marginTop: "0.5rem", display: "block" }}>
+                      💡 Người nhận cần đăng nhập email này để xác nhận nhận/hoàn quà.
+                    </Text>
+                    <Box mt="2" p="2" style={{ background: "rgba(255, 107, 53, 0.1)", borderRadius: "8px", border: "1px solid rgba(255, 107, 53, 0.3)" }}>
+                      <Text size="2" style={{ color: "#ff6b35", fontWeight: 600 }}>
+                        ℹ️ Người nhận sẽ tự động nhận thông báo khi đăng nhập email này
+                      </Text>
+                    </Box>
                 </Box>
 
                 <Box>

@@ -1,12 +1,20 @@
 import { useState, useEffect } from "react";
 import { Router } from "./Router";
+import { GoogleCallback } from "./GoogleCallback";
 import { TestData } from "./TestData";
 import { motion } from "framer-motion";
+import { DebugAuth } from "./DebugAuth";
+import { TestEncoding } from "./TestEncoding";
 
-type Page = 'home' | 'create' | 'claim' | 'create-lixi' | 'claim-lixi' | 'lixi-manage' | 'transactions' | 'success';
+type Page = 'home' | 'create' | 'claim' | 'gift-manage' | 'create-lixi' | 'claim-lixi' | 'lixi-manage' | 'transactions' | 'success' | 'debug-auth' | 'test-encoding';
 type GiftType = 'gift' | 'lixi';
 
 function App() {
+  // Check if this is Google OAuth callback page
+  if (window.location.pathname === '/auth/google/callback') {
+    return <GoogleCallback />;
+  }
+
   const [currentPage, setCurrentPage] = useState<Page>('home');
   const [createdGiftId, setCreatedGiftId] = useState<string | null>(null);
   const [giftType, setGiftType] = useState<GiftType>('gift');
@@ -16,12 +24,20 @@ function App() {
   // Ensure homepage on fresh load unless there's a valid hash route
   useEffect(() => {
     const hash = window.location.hash;
-    const validRoutes = ['/claim', '/claim-lixi', '/lixi-manage', '/transactions', '/create', '/create-lixi'];
+    const validRoutes = ['/claim', '/claim-lixi', '/gift-manage', '/lixi-manage', '/transactions', '/create', '/create-lixi', '/debug-auth', '/test-encoding'];
     const hasValidRoute = validRoutes.some(route => hash.includes(route));
     
     if (!hasValidRoute && currentPage !== 'success') {
       setCurrentPage('home');
       window.location.hash = '';
+    }
+    
+    // Handle special routes
+    if (hash === '#/debug-auth') {
+      setCurrentPage('debug-auth');
+    }
+    if (hash === '#/test-encoding') {
+      setCurrentPage('test-encoding');
     }
   }, []);
 
@@ -234,11 +250,17 @@ function App() {
         </div>
       )}
       
-      <Router 
-        currentPage={currentPage}
-        setCurrentPage={setCurrentPage}
-        onGiftCreated={handleGiftCreated}
-      />
+      {currentPage === 'debug-auth' ? (
+        <DebugAuth />
+      ) : currentPage === 'test-encoding' ? (
+        <TestEncoding />
+      ) : (
+        <Router 
+          currentPage={currentPage}
+          setCurrentPage={setCurrentPage}
+          onGiftCreated={handleGiftCreated}
+        />
+      )}
       
       {/* Floating Test Data Button */}
       <motion.button

@@ -160,13 +160,19 @@ export function NotificationBell() {
                     // Logic routing dựa trên type
                     switch (notif.type) {
                       case 'gift_received':
-                        // Người nhận: đi đến trang claim quà
+                        // Người nhận: đi đến trang claim quà (có nút Nhận và Trả lại)
                         if (notif.giftId) {
                           window.location.hash = `/claim?id=${notif.giftId}&t=${timestamp}`;
                         }
                         break;
                       
                       case 'gift_sent':
+                        // Người gửi: đi đến trang quản lý quà
+                        if (notif.giftId) {
+                          window.location.hash = `/gift-manage?id=${notif.giftId}&t=${timestamp}`;
+                        }
+                        break;
+                      
                       case 'gift_opened':
                       case 'gift_rejected':
                       case 'gift_refunded':

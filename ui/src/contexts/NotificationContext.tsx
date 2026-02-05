@@ -348,14 +348,23 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
       if (type.includes('GiftCreatedEvent')) {
         const amount = amountToSui(data.amount);
+        const giftId = data.gift_id || '';
+        
+        console.log('🎁 GiftCreatedEvent received:', {
+          recipient_email: data.recipient_email,
+          current_user_email: email,
+          will_notify_recipient: email && data.recipient_email === email,
+          sender: data.sender,
+          current_address: address,
+        });
         
         // Thông báo cho người gửi
         if (data.sender === address) {
           addNotification({
             type: 'gift_sent',
-            title: 'Đã gửi quà',
-            message: `Đã trừ ${amount} SUI từ ví của bạn.`,
-            giftId: data.gift_id,
+            title: '✅ Đã tạo quà thành công',
+            message: `Gửi ${amount} SUI đến ${data.recipient_email}. Nhấp để xem chi tiết.`,
+            giftId: giftId,
             amount,
             timestamp: eventTimestamp,
           });
@@ -369,11 +378,12 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         
         // Thông báo cho người nhận khi quà được tạo
         if (email && data.recipient_email === email) {
+          console.log('✅ ADDING NOTIFICATION FOR RECIPIENT:', email);
           addNotification({
             type: 'gift_received',
             title: '🎁 Bạn có quà mới!',
-            message: `Ai đó đã gửi ${amount} SUI cho bạn.`,
-            giftId: data.gift_id,
+            message: `Có người gửi ${amount} SUI cho bạn. Nhấp để nhận ngay!`,
+            giftId: giftId,
             amount,
             timestamp: eventTimestamp,
           });
@@ -381,25 +391,43 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
             icon: '🎉',
             duration: 6000,
           });
+        } else {
+          console.log('❌ NO NOTIFICATION - Email mismatch or not logged in', {
+            user_email: email,
+            recipient_email: data.recipient_email,
+            match: email === data.recipient_email,
+          });
         }
       }
 
       if (type.includes('GiftOpenedEvent')) {
         const amount = amountToSui(data.amount);
         
+        // Thông báo cho người gửi
         if (data.sender === address) {
           addNotification({
             type: 'gift_opened',
-            title: '✅ Quà đã được nhận',
-            message: `Người nhận đã mở quà ${amount} SUI.`,
+            title: '🎉 Quà đã được nhận',
+            message: `Người nhận đã mở quà ${amount} SUI của bạn!`,
             giftId: data.gift_id,
             amount,
             timestamp: eventTimestamp,
           });
-          // Toast cho người gửi
-          toast.success('Quà của bạn đã được nhận!', {
+          addHistoryEntry({
+            title: 'Quà đã nhận',
+            amount: `-${amount} SUI`,
+            direction: 'debit',
+            timestamp: eventTimestamp,
+          });
+          // Toast cho người gửi với animation
+          toast.success('🎉 Quà của bạn đã được nhận!', {
             icon: '✅',
-            duration: 4000,
+            duration: 5000,
+            style: {
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              color: 'white',
+              fontWeight: 'bold',
+            },
           });
         }
         
@@ -426,26 +454,36 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      if (type.includes('GiftRejectedEvent') && data.sender === address) {
-        const amount = amountToSui(data.amount);
-        addNotification({
-          type: 'gift_rejected',
-          title: '↩️ Quà bị hoàn lại',
-          message: `Người nhận đã từ chối. Bạn nhận lại ${amount} SUI.`,
-          giftId: data.gift_id,
-          amount,
-          timestamp: eventTimestamp,
-        });
-        addHistoryEntry({
-          title: 'Hoàn quà',
-          amount: `+${amount} SUI`,
-          direction: 'refund',
-          timestamp: eventTimestamp,
-        });
-        toast.success('Quà đã được hoàn lại cho bạn', {
-          icon: '↩️',
-          duration: 4000,
-        });
+      if (type.includes('GiftRejectedEvent')) {
+        const amount = data.amount ? amountToSui(data.amount) : '0';
+        
+        // Thông báo cho người gửi
+        if (data.sender === address) {
+          addNotification({
+            type: 'gift_rejected',
+            title: '↩️ Quà đã được hoàn lại',
+            message: `Người nhận đã từ chối. Bạn đã nhận lại ${amount} SUI.`,
+            giftId: data.gift_id,
+            amount,
+            timestamp: eventTimestamp,
+          });
+          addHistoryEntry({
+            title: 'Hoàn quà',
+            amount: `+${amount} SUI`,
+            direction: 'refund',
+            timestamp: eventTimestamp,
+          });
+          // Toast với style đặc biệt
+          toast('↩️ Quà đã được hoàn lại', {
+            icon: '🔄',
+            duration: 5000,
+            style: {
+              background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+              color: 'white',
+              fontWeight: 'bold',
+            },
+          });
+        }
       }
 
       if (type.includes('GiftRefundedEvent') && data.sender === address) {

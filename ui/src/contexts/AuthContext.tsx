@@ -61,6 +61,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const handleMessage = (event: MessageEvent) => {
       if (event.data.type === 'google_oauth_success') {
         const { jwt, user } = event.data;
+        console.log('✅ Received user data in AuthContext:', user);
+        console.log('✅ User name in AuthContext:', user.name);
         setGoogleJWT(jwt);
         setUser(user);
         localStorage.setItem('google_jwt', jwt);
@@ -77,9 +79,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
     const REDIRECT_URI = `${window.location.origin}/auth/google/callback`;
     
+    console.log('🔐 Google OAuth Config:', {
+      client_id: GOOGLE_CLIENT_ID,
+      redirect_uri: REDIRECT_URI,
+      origin: window.location.origin,
+    });
+
+    if (!GOOGLE_CLIENT_ID) {
+      alert('⚠️ VITE_GOOGLE_CLIENT_ID chưa được cấu hình trong file .env!\n\nVui lòng:\n1. Tạo OAuth Client ID tại Google Cloud Console\n2. Thêm vào file ui/.env:\n   VITE_GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com\n3. Restart dev server');
+      return;
+    }
+    
     const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
       `client_id=${GOOGLE_CLIENT_ID}&` +
-      `redirect_uri=${REDIRECT_URI}&` +
+      `redirect_uri=${encodeURIComponent(REDIRECT_URI)}&` +
       `response_type=token id_token&` +
       `scope=openid email profile&` +
       `nonce=${Math.random().toString(36)}`;

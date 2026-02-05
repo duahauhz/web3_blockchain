@@ -2,13 +2,14 @@ import { useEffect } from "react";
 import { HomePage } from "./HomePage";
 import { CreateGift } from "./CreateGift";
 import { ClaimGift } from "./ClaimGift";
+import { GiftManage } from "./GiftManage";
 import { CreateLixi } from "./CreateLixi";
 import { ClaimLixi } from "./ClaimLixi";
 import { LixiManage } from "./LixiManage";
 import { Transactions } from "./Transactions";
 import { motion, AnimatePresence } from "framer-motion";
 
-type Page = 'home' | 'create' | 'claim' | 'create-lixi' | 'claim-lixi' | 'lixi-manage' | 'transactions' | 'success';
+type Page = 'home' | 'create' | 'claim' | 'gift-manage' | 'create-lixi' | 'claim-lixi' | 'lixi-manage' | 'transactions' | 'success';
 type GiftType = 'gift' | 'lixi';
 
 interface RouterProps {
@@ -24,7 +25,9 @@ export function Router({ currentPage, setCurrentPage, onGiftCreated }: RouterPro
       const hash = window.location.hash;
       
       // Check for specific routes first - allow direct links
-      if (hash.includes('/lixi-manage')) {
+      if (hash.includes('/gift-manage')) {
+        setCurrentPage('gift-manage');
+      } else if (hash.includes('/lixi-manage')) {
         setCurrentPage('lixi-manage');
       } else if (hash.includes('/transactions')) {
         setCurrentPage('transactions');
@@ -108,6 +111,19 @@ export function Router({ currentPage, setCurrentPage, onGiftCreated }: RouterPro
             transition={pageTransition}
           >
             <ClaimGift onBack={() => setCurrentPage('home')} />
+          </motion.div>
+        );
+      case 'gift-manage':
+        return (
+          <motion.div
+            key="gift-manage"
+            variants={pageVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            transition={pageTransition}
+          >
+            <GiftManage onBack={() => setCurrentPage('home')} />
           </motion.div>
         );
       case 'create-lixi':
