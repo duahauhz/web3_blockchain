@@ -1,33 +1,338 @@
-# Sui Stack Hello World App
+# 🎁 SUI Gift & Lì Xì dApp
 
-A quick-start template built on the Sui Stack. This hello world app demonstrates creating and sharing greeting messages that anyone can edit - like a collaborative document where users can create posts and others can modify the text.
+<div align="center">
+  <img src="https://img.shields.io/badge/Sui-000000?style=for-the-badge&logo=sui&logoColor=white" alt="Sui"/>
+  <img src="https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB" alt="React"/>
+  <img src="https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript"/>
+  <img src="https://img.shields.io/badge/Move-FF6B35?style=for-the-badge" alt="Move"/>
+</div>
 
+<br/>
 
-## Quick Start (Try it first!)
+<div align="center">
+  <h3>🌟 Gửi quà & Lì xì SUI đến bất kỳ ai qua Email - Không cần ví! 🌟</h3>
+  <p><em>Ứng dụng Web3 giúp gửi tặng SUI coin đến người nhận thông qua email, xác thực bằng Google OAuth</em></p>
+</div>
 
-Want to see it working immediately? The app comes pre-configured with a published package so you can explore the experience right away:
+---
 
-1. Navigate to [`/ui/`](./ui/) directory
-2. Run `pnpm install`
-3. Run `pnpm dev` 
-4. Visit [http://localhost:5173/](http://localhost:5173/)
+## 📋 Mục Lục
 
-This uses existing package IDs so you can experience the app without any setup. To customize the functionality or deploy your own version, follow the steps below.
+- [Giới Thiệu](#-giới-thiệu)
+- [Tính Năng](#-tính-năng)
+- [Kiến Trúc Hệ Thống](#-kiến-trúc-hệ-thống)
+- [Luồng Hoạt Động](#-luồng-hoạt-động)
+- [Công Nghệ Sử Dụng](#-công-nghệ-sử-dụng)
+- [Cài Đặt](#-cài-đặt)
+- [Smart Contract](#-smart-contract)
+- [Screenshots](#-screenshots)
 
-## Deploy Your Own Version
-### Prerequisites: 
-- Set up the Sui development environment ([installation guide](https://docs.sui.io/guides/developer/getting-started/sui-install))
+---
 
-### Publish hello-world package
-1. Navigate to [`/move/hello-world/`](./move/hello-world/) directory
-2. Run `sui client publish` to publish package
-3. Copy the `PackageID` found in the list of `Published Objects` in the `Object Changes` section of the output. Paste it in `TESTNET_HELLO_WORLD_PACKAGE_ID` in [`./ui/src/constants.ts`](./ui/src/constants.ts).
+## 🎯 Giới Thiệu
 
-### Run frontend
-1. Navigate to [`/ui/`](./ui/) directory. 
-2. Run `pnpm install`
-3. Run `pnpm dev`
-4. Visit [http://localhost:5173/](http://localhost:5173/)
+**SUI Gift & Lì Xì dApp** là một ứng dụng phi tập trung (dApp) được xây dựng trên blockchain Sui, cho phép người dùng:
 
-## More Information
-Visit the hello world docs page for a more detailed guide [placeholder link](placeholder)
+- 🎁 **Gửi quà SUI** đến người nhận thông qua email
+- 🧧 **Tạo Lì Xì** (bao lì xì đỏ) với 2 chế độ: chia đều hoặc ngẫu nhiên
+- ✉️ **Không cần ví**: Người nhận chỉ cần xác thực email Google để nhận quà
+- 🔔 **Thông báo real-time**: Tự động thông báo khi có quà mới
+
+---
+
+## ✨ Tính Năng
+
+### 🎁 Gửi Quà (Gift)
+| Tính năng | Mô tả |
+|-----------|-------|
+| Gửi SUI qua Email | Nhập email người nhận, không cần địa chỉ ví |
+| Tin nhắn đính kèm | Gửi kèm lời chúc/tin nhắn |
+| Thời hạn | Đặt deadline cho quà (quá hạn có thể hoàn tiền) |
+| Xác thực Google | Người nhận xác minh email để nhận quà |
+| Từ chối & Hoàn tiền | Người nhận có thể từ chối, tiền hoàn về người gửi |
+
+### 🧧 Lì Xì (Red Envelope)
+| Tính năng | Mô tả |
+|-----------|-------|
+| Chia đều | Mỗi người nhận số tiền bằng nhau |
+| Ngẫu nhiên | Số tiền random, ai nhanh tay được nhiều |
+| Giới hạn người nhận | Đặt số lượng tối đa người claim |
+| Quản lý | Khóa lì xì, hoàn tiền còn lại |
+
+### 🔔 Hệ Thống Thông Báo
+- **Real-time polling**: Tự động kiểm tra quà mới mỗi 30 giây
+- **Click-to-claim**: Click thông báo để nhận quà ngay
+- **Badge count**: Hiển thị số lượng quà chưa mở
+
+---
+
+## 🏗 Kiến Trúc Hệ Thống
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        FRONTEND (React + Vite)                   │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐  │
+│  │  HomePage   │  │ CreateGift  │  │     ClaimGift           │  │
+│  │  - Hero     │  │ - Form      │  │  - Verify Email         │  │
+│  │  - Features │  │ - Preview   │  │  - Open Gift            │  │
+│  └─────────────┘  └─────────────┘  └─────────────────────────┘  │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐  │
+│  │ CreateLixi  │  │ ClaimLixi   │  │   NotificationBell      │  │
+│  │ - Equal     │  │ - Claim     │  │  - Real-time polling    │  │
+│  │ - Random    │  │ - History   │  │  - Event listener       │  │
+│  └─────────────┘  └─────────────┘  └─────────────────────────┘  │
+├─────────────────────────────────────────────────────────────────┤
+│                    @mysten/dapp-kit + Sui SDK                    │
+└───────────────────────────────┬─────────────────────────────────┘
+                                │
+                                ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                   SUI BLOCKCHAIN (Testnet)                       │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌─────────────────────────┐  ┌─────────────────────────────┐   │
+│  │   hello_world::gifting  │  │   hello_world::sui_lixi     │   │
+│  ├─────────────────────────┤  ├─────────────────────────────┤   │
+│  │  • GiftBox (owned)      │  │  • LixiEnvelope (shared)    │   │
+│  │  • send_sui_gift_email  │  │  • create_lixi              │   │
+│  │  • open_and_claim       │  │  • claim_lixi               │   │
+│  │  • reject_and_refund    │  │  • lock_lixi                │   │
+│  │  • refund_expired       │  │  • refund_lixi              │   │
+│  └─────────────────────────┘  └─────────────────────────────┘   │
+├─────────────────────────────────────────────────────────────────┤
+│                         EVENTS                                   │
+│  GiftCreatedEvent | GiftOpenedEvent | LixiClaimedEvent | ...    │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 🔄 Luồng Hoạt Động
+
+### 1️⃣ Luồng Gửi Quà (Gift Flow)
+
+```mermaid
+sequenceDiagram
+    participant S as 👤 Sender
+    participant UI as 🖥️ Frontend
+    participant BC as ⛓️ Blockchain
+    participant R as 👤 Recipient
+
+    S->>UI: 1. Nhập email + số SUI + tin nhắn
+    UI->>BC: 2. Gọi send_sui_gift_with_email()
+    BC-->>BC: 3. Tạo GiftBox object
+    BC-->>UI: 4. Emit GiftCreatedEvent
+    UI-->>S: 5. Trả về link claim
+
+    S->>R: 6. Gửi link qua email/chat
+    
+    R->>UI: 7. Mở link claim
+    UI->>R: 8. Hiện popup xác thực Google
+    R->>UI: 9. Đăng nhập Google
+    UI->>BC: 10. Gọi open_and_claim_with_zklogin()
+    BC-->>BC: 11. Verify email + transfer SUI
+    BC-->>R: 12. Nhận SUI vào ví
+```
+
+### 2️⃣ Luồng Tạo Lì Xì (Lixi Flow)
+
+```mermaid
+sequenceDiagram
+    participant C as 👤 Creator
+    participant UI as 🖥️ Frontend
+    participant BC as ⛓️ Blockchain
+    participant U as 👥 Users
+
+    C->>UI: 1. Nhập số SUI + số lượng + chế độ
+    UI->>BC: 2. Gọi create_lixi()
+    BC-->>BC: 3. Tạo LixiEnvelope (shared)
+    BC-->>UI: 4. Trả về link claim
+
+    C->>U: 5. Chia sẻ link
+
+    U->>UI: 6. Mở link claim
+    UI->>BC: 7. Gọi claim_lixi()
+    BC-->>BC: 8. Calculate amount (equal/random)
+    BC-->>U: 9. Transfer SUI
+```
+
+### 3️⃣ Luồng Thông Báo (Notification Flow)
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    NOTIFICATION SYSTEM                       │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│   [Wallet Connected] ──► [Start Polling Every 30s]          │
+│                                │                             │
+│                                ▼                             │
+│   ┌─────────────────────────────────────────────────────┐   │
+│   │  Query GiftCreatedEvent where recipient = my_email  │   │
+│   └─────────────────────────────────────────────────────┘   │
+│                                │                             │
+│                                ▼                             │
+│   ┌──────────────────┐   ┌──────────────────────────────┐   │
+│   │  No new events   │   │  New gift found!             │   │
+│   │  (continue poll) │   │  ─► Show notification badge  │   │
+│   └──────────────────┘   │  ─► Store in localStorage    │   │
+│                          └──────────────────────────────┘   │
+│                                │                             │
+│                                ▼                             │
+│   ┌─────────────────────────────────────────────────────┐   │
+│   │  User clicks notification                           │   │
+│   │  ─► Navigate to #/claim?id=...                      │   │
+│   │  ─► Show verification screen                        │   │
+│   └─────────────────────────────────────────────────────┘   │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 🛠 Công Nghệ Sử Dụng
+
+### Frontend
+| Công nghệ | Mục đích |
+|-----------|----------|
+| **React 18** | UI Framework |
+| **TypeScript** | Type safety |
+| **Vite** | Build tool |
+| **@mysten/dapp-kit** | Sui wallet integration |
+| **Framer Motion** | Animations |
+| **Radix UI** | UI Components |
+
+### Blockchain
+| Công nghệ | Mục đích |
+|-----------|----------|
+| **Sui Network** | Layer 1 blockchain |
+| **Move Language** | Smart contract |
+| **zkLogin** | Google OAuth verification |
+
+### Authentication
+| Công nghệ | Mục đích |
+|-----------|----------|
+| **Google OAuth 2.0** | Email verification |
+| **Popup Flow** | Seamless UX |
+
+---
+
+## 🚀 Cài Đặt
+
+### Yêu Cầu
+- Node.js >= 18
+- pnpm
+- Sui CLI (nếu muốn deploy contract riêng)
+
+### 1. Clone Repository
+```bash
+git clone https://github.com/your-username/sui-gift-lixi-dapp.git
+cd sui-gift-lixi-dapp
+```
+
+### 2. Cài Đặt Dependencies
+```bash
+cd ui
+pnpm install
+```
+
+### 3. Chạy Development Server
+```bash
+pnpm dev
+```
+
+### 4. Truy cập
+Mở trình duyệt và vào: `http://localhost:5175`
+
+---
+
+## 📜 Smart Contract
+
+### Package ID (Testnet)
+```
+0xac41a3a15e7d1c4ac4e67585d0c440edfc57b00e4a38e8ef515cb369f0b24fdf
+```
+
+### Modules
+
+#### `hello_world::gifting`
+Smart contract quản lý việc gửi/nhận quà qua email.
+
+```move
+// Struct chính
+struct GiftBox has key {
+    id: UID,
+    sender: address,
+    recipient_email: String,
+    message: String,
+    expiry_timestamp_ms: u64,
+    content: Coin<SUI>,
+}
+
+// Functions
+- send_sui_gift_with_email()   // Tạo gift box
+- open_and_claim_with_zklogin() // Nhận quà (verify email)
+- reject_and_refund()          // Từ chối & hoàn tiền
+- refund_expired()             // Hoàn tiền quà hết hạn
+```
+
+#### `hello_world::sui_lixi`
+Smart contract quản lý lì xì (bao đỏ).
+
+```move
+// Struct chính
+struct LixiEnvelope has key {
+    id: UID,
+    creator: address,
+    total_amount: u64,
+    remaining_amount: Balance<SUI>,
+    max_claimers: u64,
+    distribution_mode: u8,  // 0 = Equal, 1 = Random
+    claimers: Table<address, u64>,
+    is_locked: bool,
+}
+
+// Functions
+- create_lixi()   // Tạo lì xì
+- claim_lixi()    // Nhận lì xì
+- lock_lixi()     // Khóa (ngừng cho claim)
+- refund_lixi()   // Hoàn tiền còn lại
+```
+
+---
+
+## 📸 Screenshots
+
+<div align="center">
+
+### Trang Chủ
+*Giao diện trang chủ với các tùy chọn Gửi Quà và Tạo Lì Xì*
+
+### Tạo Quà
+*Form tạo quà với email người nhận, số SUI và tin nhắn*
+
+### Nhận Quà
+*Xác thực Google để nhận quà*
+
+### Lì Xì
+*Giao diện tạo và claim lì xì*
+
+</div>
+
+---
+
+## 👨‍💻 Tác Giả
+
+**PTIT Web3 Team**
+
+---
+
+## 📄 License
+
+MIT License - Xem file [LICENSE](LICENSE) để biết thêm chi tiết.
+
+---
+
+<div align="center">
+  <p>Made with ❤️ for Sui Hackathon</p>
+  <p>🎁 Happy Gifting! 🧧</p>
+</div>

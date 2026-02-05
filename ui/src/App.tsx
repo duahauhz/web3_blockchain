@@ -1,12 +1,9 @@
 import { useState, useEffect } from "react";
 import { Router } from "./Router";
 import { GoogleCallback } from "./GoogleCallback";
-import { TestData } from "./TestData";
 import { motion } from "framer-motion";
-import { DebugAuth } from "./DebugAuth";
-import { TestEncoding } from "./TestEncoding";
 
-type Page = 'home' | 'create' | 'claim' | 'gift-manage' | 'create-lixi' | 'claim-lixi' | 'lixi-manage' | 'transactions' | 'success' | 'debug-auth' | 'test-encoding';
+type Page = 'home' | 'create' | 'claim' | 'gift-manage' | 'create-lixi' | 'claim-lixi' | 'lixi-manage' | 'transactions' | 'success';
 type GiftType = 'gift' | 'lixi';
 
 function App() {
@@ -18,37 +15,23 @@ function App() {
   const [currentPage, setCurrentPage] = useState<Page>('home');
   const [createdGiftId, setCreatedGiftId] = useState<string | null>(null);
   const [giftType, setGiftType] = useState<GiftType>('gift');
-  const [showTestData, setShowTestData] = useState(false);
-  const showDebugPanel = import.meta.env.DEV && import.meta.env.VITE_SHOW_DEBUG_PANEL === 'true';
 
   // Ensure homepage on fresh load unless there's a valid hash route
   useEffect(() => {
     const hash = window.location.hash;
-    const validRoutes = ['/claim', '/claim-lixi', '/gift-manage', '/lixi-manage', '/transactions', '/create', '/create-lixi', '/debug-auth', '/test-encoding'];
+    const validRoutes = ['/claim', '/claim-lixi', '/gift-manage', '/lixi-manage', '/transactions', '/create', '/create-lixi'];
     const hasValidRoute = validRoutes.some(route => hash.includes(route));
     
     if (!hasValidRoute && currentPage !== 'success') {
       setCurrentPage('home');
       window.location.hash = '';
     }
-    
-    // Handle special routes
-    if (hash === '#/debug-auth') {
-      setCurrentPage('debug-auth');
-    }
-    if (hash === '#/test-encoding') {
-      setCurrentPage('test-encoding');
-    }
   }, []);
 
   const handleGiftCreated = (id: string, type: GiftType = 'gift') => {
-    console.log('🎯 handleGiftCreated called!');
-    console.log('Gift ID:', id);
-    console.log('Type:', type);
     setCreatedGiftId(id);
     setGiftType(type);
     setCurrentPage('success');
-    console.log('✅ State updated - should show Success page now');
   };
 
   if (currentPage === 'success') {
@@ -229,65 +212,11 @@ function App() {
   }
 
   return (
-    <>
-      {/* Debug Panel - toggled bằng biến môi trường */}
-      {showDebugPanel && (
-        <div style={{
-          position: 'fixed',
-          top: '10px',
-          left: '10px',
-          background: 'rgba(0,0,0,0.8)',
-          color: 'white',
-          padding: '10px',
-          borderRadius: '8px',
-          fontSize: '12px',
-          zIndex: 9999,
-          fontFamily: 'monospace',
-        }}>
-          <div>Current Page: <strong>{currentPage}</strong></div>
-          <div>Gift Type: <strong>{giftType}</strong></div>
-          <div>Gift ID: <strong>{createdGiftId ? createdGiftId.slice(0, 10) + '...' : 'null'}</strong></div>
-        </div>
-      )}
-      
-      {currentPage === 'debug-auth' ? (
-        <DebugAuth />
-      ) : currentPage === 'test-encoding' ? (
-        <TestEncoding />
-      ) : (
-        <Router 
-          currentPage={currentPage}
-          setCurrentPage={setCurrentPage}
-          onGiftCreated={handleGiftCreated}
-        />
-      )}
-      
-      {/* Floating Test Data Button */}
-      <motion.button
-        whileHover={{ scale: 1.05, y: -3 }}
-        whileTap={{ scale: 0.95 }}
-        onClick={() => setShowTestData(true)}
-        style={{
-          position: "fixed",
-          bottom: "2rem",
-          right: "2rem",
-          background: "linear-gradient(135deg, #ff6b35 0%, #f7931e 100%)",
-          color: "white",
-          padding: "1rem 1.5rem",
-          borderRadius: "50px",
-          border: "none",
-          cursor: "pointer",
-          fontWeight: 700,
-          fontSize: "1rem",
-          boxShadow: "0 10px 30px rgba(255, 107, 53, 0.4)",
-          zIndex: 999,
-        }}
-      >
-        📋 Test Data
-      </motion.button>
-
-      {showTestData && <TestData onClose={() => setShowTestData(false)} />}
-    </>
+    <Router 
+      currentPage={currentPage}
+      setCurrentPage={setCurrentPage}
+      onGiftCreated={handleGiftCreated}
+    />
   );
 }
 
