@@ -5,11 +5,11 @@ import {
   useCurrentAccount,
 } from "@mysten/dapp-kit";
 import { Transaction } from "@mysten/sui/transactions";
-import { Box, Button, Container, Flex, Heading, Text, TextField } from "@radix-ui/themes";
+import { Box, Button, Container, Flex, Heading, Text, TextField, Select } from "@radix-ui/themes";
 import { useNetworkVariable } from "./networkConfig";
 import { useState, useEffect, useRef } from "react";
-import { motion } from "framer-motion";
-import { Gift, ArrowLeft, Sparkles } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Gift, ArrowLeft, Sparkles, Ticket } from "lucide-react";
 import ClipLoader from "react-spinners/ClipLoader";
 import confetti from "canvas-confetti";
 import { useAuth } from "./contexts/AuthContext";
@@ -35,6 +35,9 @@ export function ClaimLixi({ onBack }: ClaimLixiProps) {
   const [isShaking, setIsShaking] = useState(false);
   const autoClaimedRef = useRef(false);
   const [timeLeft, setTimeLeft] = useState<string>("");
+  const [userTickets, setUserTickets] = useState<any[]>([]); // NFT Tickets của user
+  const [selectedTicketId, setSelectedTicketId] = useState(""); // Ticket được chọn
+  const [loadingTickets, setLoadingTickets] = useState(false);
 
   // Tự động điền Lixi ID từ URL query parameter (hỗ trợ hash route)
   useEffect(() => {
@@ -91,6 +94,72 @@ export function ClaimLixi({ onBack }: ClaimLixiProps) {
   const expiryTimestamp = lixiData?.expiry_timestamp ? Number(lixiData.expiry_timestamp) : 0;
   const creatorAddress = lixiData?.creator || "";
   const hasPassword = lixiData?.has_password || false;  // Kiểm tra có password không
+  const protectionMode = Number(lixiData?.protection_mode ?? 0); // 0=none, 1=password, 2=nft - ensure it's a number
+
+  // Fetch user's NFT tickets for this lixi
+  useEffect(() => {
+    const fetchUserTickets = async () => {
+      if (!currentAccount || !searchedLixiId || protectionMode !== 2) {
+        setUserTickets([]);
+        return;
+      }
+
+      setLoadingTickets(true);
+      try {
+        // Fetch all LixiTicket NFTs owned by current user
+        const ticketType = `${packageId}::lixi_ticket::LixiTicket`;
+        const ownedObjects = await suiClient.getOwnedObjects({
+          owner: currentAccount.address,
+          filter: {
+            StructType: ticketType,
+          },
+          options: {
+            showContent: true,
+          },
+        });
+
+        console.log("🎫 User owned LixiTickets:", ownedObjects.data);
+        console.log("🔍 Looking for lixi_id:", searchedLixiId);
+
+        // Filter tickets that belong to this lixi
+        const matchingTickets = ownedObjects.data
+          .filter((obj: any) => {
+            if (obj.data?.content?.dataType !== "moveObject") return false;
+            const fields = obj.data.content.fields as any;
+            // lixi_id trong ticket có thể là string hoặc object với id property
+            const ticketLixiId = typeof fields.lixi_id === 'string' 
+              ? fields.lixi_id 
+              : fields.lixi_id?.id || fields.lixi_id;
+            console.log("🎫 Ticket lixi_id:", ticketLixiId, "vs", searchedLixiId);
+            return ticketLixiId === searchedLixiId;
+          })
+          .map((obj: any) => {
+            const objectId = obj.data?.objectId;  // This is the actual object ID we need
+            const fields = obj.data?.content?.fields || {};
+            console.log("🎫 Ticket objectId:", objectId);
+            return {
+              ...fields,
+              objectId: objectId,  // Use objectId instead of id to avoid confusion with fields.id
+            };
+          });
+
+        console.log("✅ Matching tickets:", matchingTickets);
+        setUserTickets(matchingTickets);
+        
+        // Auto-select first ticket if available
+        if (matchingTickets.length > 0 && !selectedTicketId) {
+          setSelectedTicketId(matchingTickets[0].objectId);
+        }
+      } catch (err) {
+        console.error("Error fetching tickets:", err);
+        setUserTickets([]);
+      } finally {
+        setLoadingTickets(false);
+      }
+    };
+
+    fetchUserTickets();
+  }, [currentAccount, searchedLixiId, protectionMode, packageId, suiClient]);
 
   useEffect(() => {
     if (!expiryTimestamp) {
@@ -116,7 +185,7 @@ export function ClaimLixi({ onBack }: ClaimLixiProps) {
     return () => clearInterval(interval);
   }, [expiryTimestamp]);
 
-  // Auto-claim chỉ khi KHÔNG có password
+  // Auto-claim chỉ khi KHÔNG có password VÀ KHÔNG phải NFT mode
   useEffect(() => {
     if (
       !searchedLixiId ||
@@ -126,7 +195,7 @@ export function ClaimLixi({ onBack }: ClaimLixiProps) {
       waitingForTxn ||
       claimed ||
       autoClaimedRef.current ||
-      hasPassword  // KHÔNG auto-claim nếu có password
+      protectionMode !== 0  // KHÔNG auto-claim nếu có bảo mật (password hoặc NFT)
     ) {
       return;
     }
@@ -137,7 +206,7 @@ export function ClaimLixi({ onBack }: ClaimLixiProps) {
 
     autoClaimedRef.current = true;
     handleClaimLixi();
-  }, [searchedLixiId, currentAccount, lixiData, isPending, waitingForTxn, claimed, isActive, hasPassword]);
+  }, [searchedLixiId, currentAccount, lixiData, isPending, waitingForTxn, claimed, isActive, protectionMode]);
 
   const handleSearchLixi = () => {
     const trimmedId = lixiId.trim();
@@ -188,9 +257,21 @@ export function ClaimLixi({ onBack }: ClaimLixiProps) {
     }
 
     // Kiểm tra password nếu cần
-    if (hasPassword && !password.trim()) {
+    if (protectionMode === 1 && !password.trim()) {
       setError("Lì xì này cần mật khẩu! Vui lòng nhập mật khẩu.");
       return;
+    }
+
+    // Kiểm tra NFT ticket nếu cần
+    if (protectionMode === 2) {
+      if (userTickets.length === 0) {
+        setError("Bạn không có NFT Ticket để claim lì xì này!");
+        return;
+      }
+      if (!selectedTicketId) {
+        setError("Vui lòng chọn NFT Ticket để claim!");
+        return;
+      }
     }
 
     // Không bắt buộc phải đăng nhập Google
@@ -206,15 +287,34 @@ export function ClaimLixi({ onBack }: ClaimLixiProps) {
 
     const tx = new Transaction();
 
-    tx.moveCall({
-      target: `${packageId}::sui_lixi::claim_lixi`,
-      arguments: [
-        tx.object(searchedLixiId),
-        tx.pure.string(claimerEmail),
-        tx.pure.string(password),  // Truyền password
-        tx.object("0x6"), // Clock
-      ],
-    });
+    console.log("🔐 Protection mode:", protectionMode, "Type:", typeof protectionMode);
+    console.log("🎫 Selected ticket ID:", selectedTicketId);
+    console.log("📦 Lixi ID:", searchedLixiId);
+
+    if (protectionMode === 2) {
+      // NFT Ticket mode - call claim_lixi_with_nft
+      console.log("📤 Calling claim_lixi_with_nft...");
+      tx.moveCall({
+        target: `${packageId}::sui_lixi::claim_lixi_with_nft`,
+        arguments: [
+          tx.object(searchedLixiId),
+          tx.object(selectedTicketId),  // NFT Ticket
+          tx.pure.string(claimerEmail),
+          tx.object("0x6"), // Clock
+        ],
+      });
+    } else {
+      // Password mode or public mode
+      tx.moveCall({
+        target: `${packageId}::sui_lixi::claim_lixi`,
+        arguments: [
+          tx.object(searchedLixiId),
+          tx.pure.string(claimerEmail),
+          tx.pure.string(password),  // Truyền password
+          tx.object("0x6"), // Clock
+        ],
+      });
+    }
 
     signAndExecute(
       { transaction: tx },
@@ -250,12 +350,14 @@ export function ClaimLixi({ onBack }: ClaimLixiProps) {
             });
         },
         onError: (err: any) => {
-          console.error(err);
+          console.error("❌ Claim error:", err);
           let errorMessage = "Có lỗi xảy ra. ";
 
           const message = err?.message || "";
           const moveAbortMatch = message.match(/MoveAbort\([^)]*,\s*(\d+)\)/);
           const moveAbortCode = moveAbortMatch ? Number(moveAbortMatch[1]) : null;
+
+          console.log("Move abort code:", moveAbortCode);
 
           if (moveAbortCode === 1 || message.includes("ELixiExpired")) {
             errorMessage = "🕒 Lì xì đã hết hạn!";
@@ -265,6 +367,8 @@ export function ClaimLixi({ onBack }: ClaimLixiProps) {
             errorMessage = "😔 Lì xì đã hết hoặc không còn chỗ!";
           } else if (moveAbortCode === 3 || message.includes("EAlreadyClaimed")) {
             errorMessage = "⚠️ Bạn đã nhận lì xì này rồi!";
+          } else if (moveAbortCode === 9 || message.includes("EInvalidTicket")) {
+            errorMessage = "🎫 NFT Ticket không hợp lệ hoặc không thuộc lì xì này!";
           } else if (message) {
             errorMessage += message;
           }
@@ -679,21 +783,124 @@ export function ClaimLixi({ onBack }: ClaimLixiProps) {
                   </Flex>
 
                   {/* Password Input nếu lì xì cần mật khẩu */}
-                  {hasPassword && isActive && (
-                    <Box style={{ marginTop: "16px" }}>
-                      <Text size="2" weight="medium" style={{ marginBottom: "8px", display: "block" }}>
-                        🔐 Nhập mật khẩu để nhận lì xì:
-                      </Text>
-                      <TextField.Root
-                        type="password"
-                        placeholder="Nhập mật khẩu..."
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        size="3"
-                        style={{ marginBottom: "8px" }}
-                      />
-                    </Box>
-                  )}
+                  <AnimatePresence>
+                    {protectionMode === 1 && isActive && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        style={{ marginTop: "16px" }}
+                      >
+                        <Box
+                          style={{
+                            padding: "16px",
+                            borderRadius: "14px",
+                            background: "rgba(255, 107, 53, 0.05)",
+                            border: "1px solid rgba(255, 165, 120, 0.24)",
+                          }}
+                        >
+                          <Text size="2" weight="medium" style={{ marginBottom: "8px", display: "block" }}>
+                            🔐 Nhập mật khẩu để nhận lì xì:
+                          </Text>
+                          <TextField.Root
+                            type="password"
+                            placeholder="Nhập mật khẩu..."
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            size="3"
+                          />
+                        </Box>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  {/* NFT Ticket Selection nếu lì xì dùng NFT */}
+                  <AnimatePresence>
+                    {protectionMode === 2 && isActive && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        style={{ marginTop: "16px" }}
+                      >
+                        <Box
+                          style={{
+                            padding: "16px",
+                            borderRadius: "14px",
+                            background: "linear-gradient(135deg, rgba(255, 107, 53, 0.05) 0%, rgba(255, 180, 120, 0.1) 100%)",
+                            border: "1px solid rgba(255, 165, 120, 0.24)",
+                          }}
+                        >
+                          <Flex gap="2" align="center" style={{ marginBottom: "12px" }}>
+                            <Ticket size={16} style={{ color: "#ff6b35" }} />
+                            <Text size="2" weight="bold" style={{ color: "#9a3412" }}>
+                              Cần NFT Ticket để claim lì xì này
+                            </Text>
+                          </Flex>
+
+                          {loadingTickets ? (
+                            <Flex align="center" justify="center" gap="2" style={{ padding: "20px" }}>
+                              <ClipLoader size={16} color="#ff6b35" />
+                              <Text size="2" style={{ color: "#666" }}>Đang tìm ticket của bạn...</Text>
+                            </Flex>
+                          ) : userTickets.length === 0 ? (
+                            <Box
+                              style={{
+                                padding: "16px",
+                                borderRadius: "12px",
+                                background: "rgba(192, 57, 43, 0.08)",
+                                border: "1px solid rgba(192, 57, 43, 0.2)",
+                                textAlign: "center",
+                              }}
+                            >
+                              <Text size="2" style={{ color: "#c0392b", display: "block" }}>
+                                😔 Bạn không có NFT Ticket cho lì xì này
+                              </Text>
+                              <Text size="1" style={{ color: "#888", marginTop: "6px", display: "block" }}>
+                                Liên hệ người tạo lì xì để nhận ticket
+                              </Text>
+                            </Box>
+                          ) : (
+                            <>
+                              <Text size="2" style={{ color: "#666", marginBottom: "10px", display: "block" }}>
+                                🎫 Bạn có {userTickets.length} ticket. Chọn ticket để claim:
+                              </Text>
+                              <Select.Root
+                                value={selectedTicketId}
+                                onValueChange={setSelectedTicketId}
+                                size="3"
+                              >
+                                <Select.Trigger style={{ width: "100%" }} placeholder="Chọn NFT Ticket..." />
+                                <Select.Content>
+                                  {userTickets.map((ticket) => (
+                                    <Select.Item key={ticket.objectId} value={ticket.objectId}>
+                                      🎫 Ticket #{ticket.ticket_number}/{ticket.total_tickets}
+                                    </Select.Item>
+                                  ))}
+                                </Select.Content>
+                              </Select.Root>
+                              
+                              {selectedTicketId && (
+                                <Box
+                                  style={{
+                                    marginTop: "12px",
+                                    padding: "10px",
+                                    borderRadius: "10px",
+                                    background: "rgba(39, 174, 96, 0.08)",
+                                    border: "1px solid rgba(39, 174, 96, 0.2)",
+                                  }}
+                                >
+                                  <Text size="1" style={{ color: "#27ae60", display: "block" }}>
+                                    ✓ Ticket sẽ bị đốt (burn) sau khi claim thành công
+                                  </Text>
+                                </Box>
+                              )}
+                            </>
+                          )}
+                        </Box>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
 
                   {error && (
                     <Box style={{
@@ -708,7 +915,13 @@ export function ClaimLixi({ onBack }: ClaimLixiProps) {
 
                   <Button
                     onClick={handleClaimLixi}
-                    disabled={waitingForTxn || !isActive || !currentAccount}
+                    disabled={
+                      waitingForTxn || 
+                      !isActive || 
+                      !currentAccount ||
+                      (protectionMode === 2 && userTickets.length === 0) ||
+                      (protectionMode === 2 && !selectedTicketId)
+                    }
                     size="4"
                     style={{
                       background: isActive

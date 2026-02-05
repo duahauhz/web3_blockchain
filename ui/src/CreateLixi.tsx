@@ -26,6 +26,10 @@ import {
   Clock,
   MessageCircle,
   Sparkles,
+  Shield,
+  Ticket,
+  Plus,
+  X,
 } from "lucide-react";
 import ClipLoader from "react-spinners/ClipLoader";
 import confetti from "canvas-confetti";
@@ -54,6 +58,8 @@ export function CreateLixi({ onBack, onCreated }: CreateLixiProps) {
   const [maxAmount, setMaxAmount] = useState("1");
   const [message, setMessage] = useState("");
   const [password, setPassword] = useState("");  // Mật khẩu bảo vệ
+  const [protectionMode, setProtectionMode] = useState("0"); // 0=none, 1=password, 2=nft
+  const [nftRecipients, setNftRecipients] = useState<string[]>([""]); // Danh sách địa chỉ ví cho NFT ticket
   const [expiryHours, setExpiryHours] = useState("24");
   const [waitingForTxn, setWaitingForTxn] = useState(false);
   const [error, setError] = useState("");
@@ -67,6 +73,28 @@ export function CreateLixi({ onBack, onCreated }: CreateLixiProps) {
   };
 
   const formatSui = (amountInMist: bigint) => Number(amountInMist) / 1_000_000_000;
+
+  // Helper functions for NFT recipients
+  const addNftRecipient = () => {
+    setNftRecipients([...nftRecipients, ""]);
+  };
+
+  const removeNftRecipient = (index: number) => {
+    if (nftRecipients.length > 1) {
+      const newRecipients = nftRecipients.filter((_, i) => i !== index);
+      setNftRecipients(newRecipients);
+    }
+  };
+
+  const updateNftRecipient = (index: number, value: string) => {
+    const newRecipients = [...nftRecipients];
+    newRecipients[index] = value;
+    setNftRecipients(newRecipients);
+  };
+
+  const isValidSuiAddress = (address: string) => {
+    return /^0x[a-fA-F0-9]{64}$/.test(address);
+  };
 
   const handleCreateLixi = async () => {
     if (!totalAmount || !maxRecipients || !message) {
@@ -114,6 +142,28 @@ export function CreateLixi({ onBack, onCreated }: CreateLixiProps) {
       }
     }
 
+    // Validate NFT mode - check addresses
+    if (protectionMode === "2") {
+      const validAddresses = nftRecipients.filter(addr => addr.trim() !== "");
+      if (validAddresses.length === 0) {
+        setError("Vui lòng nhập ít nhất 1 địa chỉ ví để gửi NFT Ticket!");
+        return;
+      }
+      
+      const invalidAddresses = validAddresses.filter(addr => !isValidSuiAddress(addr.trim()));
+      if (invalidAddresses.length > 0) {
+        setError(`Địa chỉ ví không hợp lệ: ${invalidAddresses.join(", ")}\nĐịa chỉ Sui phải bắt đầu bằng 0x và có 64 ký tự hex`);
+        return;
+      }
+
+      // Check duplicates
+      const uniqueAddresses = new Set(validAddresses.map(a => a.trim().toLowerCase()));
+      if (uniqueAddresses.size !== validAddresses.length) {
+        setError("Có địa chỉ ví bị trùng lặp!");
+        return;
+      }
+    }
+
     if (!currentAccount) {
       setError("Vui lòng kết nối ví Sui trước khi tạo lì xì!");
       return;
@@ -157,21 +207,46 @@ export function CreateLixi({ onBack, onCreated }: CreateLixiProps) {
       const creatorEmail =
         user?.email || `${currentAccount.address.slice(0, 8)}@wallet.sui`;
 
-      tx.moveCall({
-        target: `${packageId}::sui_lixi::create_lixi`,
-        arguments: [
-          coin,
-          tx.pure.string(creatorEmail),
-          tx.pure.u64(recipientsNum),
-          tx.pure.u8(parseInt(distributionMode, 10)),
-          tx.pure.u64(minInMist),
-          tx.pure.u64(maxInMist),
-          tx.pure.string(message),
-          tx.pure.string(password),  // Mật khẩu bảo vệ
-          tx.pure.u64(expiryNum),
-          tx.object("0x6"),
-        ],
-      });
+      // Choose function based on protection mode
+      if (protectionMode === "2") {
+        // NFT Ticket mode
+        const validAddresses = nftRecipients.filter(addr => addr.trim() !== "").map(a => a.trim());
+        const ticketImageUrl = "https://i.imgur.com/7Z9YQZX.png"; // Default ticket image
+        
+        tx.moveCall({
+          target: `${packageId}::sui_lixi::create_lixi_with_nft`,
+          arguments: [
+            coin,
+            tx.pure.string(creatorEmail),
+            tx.pure.u64(validAddresses.length), // max_recipients = number of NFT tickets
+            tx.pure.u8(parseInt(distributionMode, 10)),
+            tx.pure.u64(minInMist),
+            tx.pure.u64(maxInMist),
+            tx.pure.string(message),
+            tx.pure.vector("address", validAddresses),
+            tx.pure.string(ticketImageUrl),  // Thêm ticket image URL
+            tx.pure.u64(expiryNum),
+            tx.object("0x6"),
+          ],
+        });
+      } else {
+        // No protection or Password mode
+        tx.moveCall({
+          target: `${packageId}::sui_lixi::create_lixi`,
+          arguments: [
+            coin,
+            tx.pure.string(creatorEmail),
+            tx.pure.u64(recipientsNum),
+            tx.pure.u8(parseInt(distributionMode, 10)),
+            tx.pure.u64(minInMist),
+            tx.pure.u64(maxInMist),
+            tx.pure.string(message),
+            tx.pure.string(protectionMode === "1" ? password : ""),  // Password only if mode is 1
+            tx.pure.u64(expiryNum),
+            tx.object("0x6"),
+          ],
+        });
+      }
 
       signAndExecute(
         { transaction: tx },
@@ -295,6 +370,14 @@ export function CreateLixi({ onBack, onCreated }: CreateLixiProps) {
     }
   };
 
+  const getProtectionLabel = () => {
+    switch (protectionMode) {
+      case "1": return "🔒 Mật khẩu";
+      case "2": return "🎫 NFT Ticket";
+      default: return "🌐 Công khai";
+    }
+  };
+
   const previewStats = [
     {
       label: "Tổng tiền",
@@ -302,15 +385,17 @@ export function CreateLixi({ onBack, onCreated }: CreateLixiProps) {
     },
     {
       label: "Người nhận",
-      value: maxRecipients ? `${maxRecipients} người` : "Chưa nhập",
+      value: protectionMode === "2" 
+        ? `${nftRecipients.filter(a => a.trim()).length} ticket` 
+        : (maxRecipients ? `${maxRecipients} người` : "Chưa nhập"),
     },
     {
       label: "Thời hạn",
       value: expiryHours ? `${expiryHours} giờ` : "Chưa đặt",
     },
     {
-      label: "Chế độ",
-      value: distributionMode === "0" ? "Chia đều" : "Random",
+      label: "Bảo mật",
+      value: getProtectionLabel(),
     },
   ];
 
@@ -787,23 +872,173 @@ export function CreateLixi({ onBack, onCreated }: CreateLixiProps) {
 
                   <Separator my="2" style={{ background: "rgba(255, 164, 120, 0.22)" }} />
 
-                  {/* Password Protection */}
+                  {/* Protection Mode Selection */}
                   <Box>
-                    <Flex gap="2" align="center" style={{ marginBottom: "8px" }}>
-                      <span style={{ fontSize: "16px" }}>🔒</span>
-                      <Text weight="medium">Mật khẩu bảo vệ</Text>
-                      <Text size="1" style={{ color: "#888" }}>(tùy chọn)</Text>
+                    <Flex gap="2" align="center" style={{ marginBottom: "12px" }}>
+                      <Shield size={16} style={{ color: "#ff6b35" }} />
+                      <Text weight="medium">Bảo mật lì xì</Text>
                     </Flex>
-                    <TextField.Root
-                      type="password"
-                      placeholder="Để trống nếu không cần mật khẩu"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      size="3"
-                    />
-                    <Text size="1" style={{ color: "#888", marginTop: "6px", display: "block" }}>
-                      💡 Thêm mật khẩu để chỉ người biết mật khẩu mới nhận được lì xì
-                    </Text>
+                    
+                    <Flex gap="2" wrap="wrap">
+                      {[
+                        { value: "0", label: "🌐 Công khai", desc: "Ai có link đều claim được" },
+                        { value: "1", label: "🔒 Mật khẩu", desc: "Cần mật khẩu để claim" },
+                        { value: "2", label: "🎫 NFT Ticket", desc: "Chỉ người có ticket claim được" },
+                      ].map((mode) => (
+                        <motion.button
+                          key={mode.value}
+                          onClick={() => setProtectionMode(mode.value)}
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          style={{
+                            flex: "1 1 150px",
+                            padding: "12px 16px",
+                            borderRadius: "12px",
+                            border: protectionMode === mode.value 
+                              ? "2px solid #ff6b35" 
+                              : "2px solid rgba(255, 164, 120, 0.3)",
+                            background: protectionMode === mode.value 
+                              ? "rgba(255, 107, 53, 0.1)" 
+                              : "rgba(255, 255, 255, 0.5)",
+                            cursor: "pointer",
+                            textAlign: "left",
+                          }}
+                        >
+                          <Text weight="bold" style={{ color: "#1f2937", display: "block" }}>
+                            {mode.label}
+                          </Text>
+                          <Text size="1" style={{ color: "#666", marginTop: "4px", display: "block" }}>
+                            {mode.desc}
+                          </Text>
+                        </motion.button>
+                      ))}
+                    </Flex>
+
+                    {/* Password input for password mode */}
+                    <AnimatePresence>
+                      {protectionMode === "1" && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: "auto" }}
+                          exit={{ opacity: 0, height: 0 }}
+                          style={{ marginTop: "16px" }}
+                        >
+                          <Flex gap="2" align="center" style={{ marginBottom: "8px" }}>
+                            <span style={{ fontSize: "16px" }}>🔑</span>
+                            <Text weight="medium">Mật khẩu bảo vệ</Text>
+                          </Flex>
+                          <TextField.Root
+                            type="password"
+                            placeholder="Nhập mật khẩu cho lì xì"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            size="3"
+                          />
+                          <Text size="1" style={{ color: "#888", marginTop: "6px", display: "block" }}>
+                            💡 Chia sẻ mật khẩu này cho người bạn muốn gửi lì xì
+                          </Text>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+
+                    {/* NFT Recipients for NFT mode */}
+                    <AnimatePresence>
+                      {protectionMode === "2" && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: "auto" }}
+                          exit={{ opacity: 0, height: 0 }}
+                          style={{ marginTop: "16px" }}
+                        >
+                          <Box
+                            style={{
+                              padding: "16px",
+                              borderRadius: "14px",
+                              background: "linear-gradient(135deg, rgba(255, 107, 53, 0.05) 0%, rgba(255, 180, 120, 0.1) 100%)",
+                              border: "1px solid rgba(255, 165, 120, 0.24)",
+                            }}
+                          >
+                            <Flex gap="2" align="center" style={{ marginBottom: "12px" }}>
+                              <Ticket size={16} style={{ color: "#ff6b35" }} />
+                              <Text weight="bold" style={{ color: "#9a3412" }}>
+                                Địa chỉ ví nhận NFT Ticket
+                              </Text>
+                            </Flex>
+                            
+                            <Text size="1" style={{ color: "#666", marginBottom: "12px", display: "block" }}>
+                              🎫 Mỗi địa chỉ sẽ nhận 1 NFT Ticket để claim lì xì. Ticket sẽ bị đốt khi claim.
+                            </Text>
+
+                            <Flex direction="column" gap="2">
+                              {nftRecipients.map((address, index) => (
+                                <Flex key={index} gap="2" align="center">
+                                  <TextField.Root
+                                    placeholder="0x..."
+                                    value={address}
+                                    onChange={(e) => updateNftRecipient(index, e.target.value)}
+                                    size="2"
+                                    style={{ flex: 1, fontFamily: "monospace", fontSize: "12px" }}
+                                  />
+                                  {nftRecipients.length > 1 && (
+                                    <Button
+                                      variant="soft"
+                                      size="1"
+                                      onClick={() => removeNftRecipient(index)}
+                                      style={{ 
+                                        color: "#c0392b", 
+                                        background: "rgba(192, 57, 43, 0.1)",
+                                        padding: "6px",
+                                      }}
+                                    >
+                                      <X size={14} />
+                                    </Button>
+                                  )}
+                                  {address && !isValidSuiAddress(address.trim()) && (
+                                    <Text size="1" style={{ color: "#c0392b" }}>❌</Text>
+                                  )}
+                                  {address && isValidSuiAddress(address.trim()) && (
+                                    <Text size="1" style={{ color: "#27ae60" }}>✓</Text>
+                                  )}
+                                </Flex>
+                              ))}
+                            </Flex>
+
+                            <Button
+                              variant="soft"
+                              size="2"
+                              onClick={addNftRecipient}
+                              style={{ 
+                                marginTop: "12px",
+                                color: "#ff6b35", 
+                                background: "rgba(255, 107, 53, 0.1)",
+                                width: "100%",
+                              }}
+                            >
+                              <Plus size={16} />
+                              Thêm địa chỉ ví
+                            </Button>
+
+                            <Flex 
+                              justify="between" 
+                              align="center" 
+                              style={{ 
+                                marginTop: "12px", 
+                                padding: "8px 12px", 
+                                background: "rgba(255, 107, 53, 0.08)", 
+                                borderRadius: "8px" 
+                              }}
+                            >
+                              <Text size="2" style={{ color: "#9a3412" }}>
+                                Tổng NFT Tickets:
+                              </Text>
+                              <Text size="2" weight="bold" style={{ color: "#ff6b35" }}>
+                                {nftRecipients.filter(a => isValidSuiAddress(a.trim())).length} ticket
+                              </Text>
+                            </Flex>
+                          </Box>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </Box>
 
                   {error && (

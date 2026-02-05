@@ -7,6 +7,7 @@ module hello_world::sui_lixi {
     use sui::table::{Self, Table};
     use sui::hash;
     use sui::bcs;
+    use hello_world::lixi_ticket::{Self, LixiTicket};
 
     // ========== ERROR CODES ==========
     const ELixiExpired: u64 = 1;
@@ -17,6 +18,12 @@ module hello_world::sui_lixi {
     const EInvalidAmount: u64 = 6;
     const ELixiLocked: u64 = 7;     // Lì xì đã bị khóa
     const EWrongPassword: u64 = 8;  // Sai mật khẩu
+    const EInvalidTicket: u64 = 9;  // Ticket không hợp lệ
+
+    // ========== PROTECTION MODES ==========
+    const PROTECTION_NONE: u8 = 0;      // Không bảo vệ (ai cũng claim được)
+    const PROTECTION_PASSWORD: u8 = 1;  // Bảo vệ bằng mật khẩu
+    const PROTECTION_NFT: u8 = 2;       // Bảo vệ bằng NFT Ticket
 
     // ========== DISTRIBUTION MODES ==========
     const MODE_EQUAL: u8 = 0;      // Chia đều
@@ -45,6 +52,7 @@ module hello_world::sui_lixi {
         is_active: bool,
         secret_hash: vector<u8>,    // Hash của mật khẩu (blake2b256)
         has_password: bool,         // Có dùng mật khẩu không
+        protection_mode: u8,        // Chế độ bảo vệ: 0=none, 1=password, 2=nft
     }
 
     // Record của mỗi người claim
@@ -172,6 +180,13 @@ module hello_world::sui_lixi {
             vector::empty<u8>()
         };
 
+        // Xác định protection mode
+        let protection_mode = if (has_password) {
+            PROTECTION_PASSWORD
+        } else {
+            PROTECTION_NONE
+        };
+
         let lixi = LixiEnvelope {
             id: lixi_id,
             creator,
@@ -191,6 +206,7 @@ module hello_world::sui_lixi {
             is_active: true,
             secret_hash,
             has_password,
+            protection_mode,
         };
 
         let id_inner = object::uid_to_inner(&lixi.id);
@@ -206,6 +222,96 @@ module hello_world::sui_lixi {
         });
 
         // Share object để mọi người có thể claim
+        transfer::share_object(lixi);
+    }
+
+    // 1b. Tạo bao lì xì với NFT Ticket bảo vệ
+    public entry fun create_lixi_with_nft(
+        input_coin: Coin<SUI>,
+        creator_email: String,
+        max_recipients: u64,
+        distribution_mode: u8,
+        min_amount: u64,
+        max_amount: u64,
+        message: String,
+        recipient_addresses: vector<address>,  // Danh sách địa chỉ nhận ticket
+        ticket_image_url: String,              // URL hình ảnh cho ticket
+        expiry_hours: u64,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ) {
+        let total_amount = coin::value(&input_coin);
+        let num_recipients = vector::length(&recipient_addresses);
+        
+        // Validate
+        assert!(total_amount > 0, EInvalidAmount);
+        assert!(max_recipients > 0, EInvalidAmount);
+        assert!(num_recipients > 0 && num_recipients <= max_recipients, EInvalidAmount);
+        
+        if (distribution_mode == MODE_RANDOM) {
+            assert!(min_amount > 0 && max_amount >= min_amount, EInvalidAmount);
+            assert!(total_amount >= min_amount * max_recipients, EInvalidAmount);
+        };
+
+        let creator = ctx.sender();
+        let lixi_id_uid = object::new(ctx);
+        let lixi_id = object::uid_to_inner(&lixi_id_uid);
+        let current_time = sui::clock::timestamp_ms(clock);
+        let expiry_timestamp = current_time + (expiry_hours * 60 * 60 * 1000);
+
+        let lixi = LixiEnvelope {
+            id: lixi_id_uid,
+            creator,
+            creator_email,
+            total_amount,
+            remaining_amount: total_amount,
+            max_recipients,
+            claimed_count: 0,
+            distribution_mode,
+            min_amount,
+            max_amount,
+            message,
+            balance: input_coin,
+            claimers: table::new(ctx),
+            created_at: current_time,
+            expiry_timestamp,
+            is_active: true,
+            secret_hash: vector::empty<u8>(),
+            has_password: false,
+            protection_mode: PROTECTION_NFT,  // Bảo vệ bằng NFT
+        };
+
+        // Emit lixi created event
+        event::emit(LixiCreatedEvent {
+            lixi_id,
+            creator,
+            total_amount,
+            max_recipients,
+            distribution_mode,
+            expiry_timestamp,
+        });
+
+        // Mint và transfer tickets cho từng recipient
+        let total_tickets = num_recipients;
+        let mut i = 0;
+        while (i < num_recipients) {
+            let recipient = *vector::borrow(&recipient_addresses, i);
+            let ticket = lixi_ticket::mint_ticket(
+                lixi_id,
+                i + 1,  // ticket_number bắt đầu từ 1
+                total_tickets,
+                creator,
+                recipient,
+                message,
+                ticket_image_url,
+                current_time,
+                ctx
+            );
+            transfer::public_transfer(ticket, recipient);
+            i = i + 1;
+        };
+
+        // Share object
         transfer::share_object(lixi);
     }
 
@@ -315,6 +421,109 @@ module hello_world::sui_lixi {
         };
     }
 
+    // 2b. Claim lì xì bằng NFT Ticket (ticket sẽ bị burn)
+    public entry fun claim_lixi_with_nft(
+        lixi: &mut LixiEnvelope,
+        ticket: LixiTicket,
+        claimer_email: String,
+        clock: &Clock,
+        ctx: &mut TxContext
+    ) {
+        let claimer = ctx.sender();
+        let lixi_id = object::uid_to_inner(&lixi.id);
+        
+        // Check if locked
+        assert!(lixi.is_active, ELixiLocked);
+        
+        // Verify đây là Lì Xì dùng NFT protection
+        assert!(lixi.protection_mode == PROTECTION_NFT, EInvalidTicket);
+        
+        // Verify và burn ticket
+        let is_valid = lixi_ticket::verify_and_burn(ticket, lixi_id, ctx);
+        assert!(is_valid, EInvalidTicket);
+        
+        // Check expiry
+        let current_time = sui::clock::timestamp_ms(clock);
+        assert!(current_time <= lixi.expiry_timestamp, ELixiExpired);
+        
+        // Check not claimed before
+        assert!(!table::contains(&lixi.claimers, claimer), EAlreadyClaimed);
+        
+        // Check còn chỗ
+        assert!(lixi.claimed_count < lixi.max_recipients, ELixiEmpty);
+        
+        // Check còn tiền
+        assert!(lixi.remaining_amount > 0, ELixiEmpty);
+
+        // Calculate amount to give
+        let amount = if (lixi.distribution_mode == MODE_EQUAL) {
+            let remaining_people = lixi.max_recipients - lixi.claimed_count;
+            lixi.remaining_amount / remaining_people
+        } else {
+            let random_amount = generate_random_amount(
+                &lixi.id,
+                claimer,
+                lixi.min_amount,
+                lixi.max_amount,
+                clock,
+                ctx
+            );
+            
+            if (random_amount > lixi.remaining_amount) {
+                lixi.remaining_amount
+            } else {
+                random_amount
+            }
+        };
+
+        let final_amount = if (amount > lixi.remaining_amount) {
+            lixi.remaining_amount
+        } else if (amount == 0) {
+            1
+        } else {
+            amount
+        };
+
+        // Update state
+        lixi.claimed_count = lixi.claimed_count + 1;
+        lixi.remaining_amount = lixi.remaining_amount - final_amount;
+
+        // Record claim
+        let record = ClaimRecord {
+            claimer,
+            email: claimer_email,
+            amount: final_amount,
+            timestamp: current_time,
+        };
+        table::add(&mut lixi.claimers, claimer, record);
+
+        // Emit event
+        event::emit(LixiClaimedEvent {
+            lixi_id,
+            creator: lixi.creator,
+            claimer,
+            claimer_email,
+            amount: final_amount,
+            claimed_count: lixi.claimed_count,
+            remaining_amount: lixi.remaining_amount,
+        });
+
+        // Transfer coin
+        let coin = coin::split(&mut lixi.balance, final_amount, ctx);
+        transfer::public_transfer(coin, claimer);
+
+        // Check if completed
+        if (lixi.claimed_count >= lixi.max_recipients || lixi.remaining_amount == 0) {
+            lixi.is_active = false;
+            
+            event::emit(LixiCompletedEvent {
+                lixi_id,
+                total_distributed: lixi.total_amount - lixi.remaining_amount,
+                total_claimers: lixi.claimed_count,
+            });
+        };
+    }
+
     // 3. Thu hồi lì xì đã hết hạn hoặc đã khóa (chỉ creator)
     public entry fun reclaim_expired_lixi(
         lixi: &mut LixiEnvelope,
@@ -373,20 +582,31 @@ module hello_world::sui_lixi {
     // ========== VIEW FUNCTIONS ==========
     
     // Get lixi stats
-    public fun get_lixi_info(lixi: &LixiEnvelope): (u64, u64, u64, u64, bool, bool) {
+    public fun get_lixi_info(lixi: &LixiEnvelope): (u64, u64, u64, u64, bool, bool, u8) {
         (
             lixi.total_amount,
             lixi.remaining_amount,
             lixi.claimed_count,
             lixi.max_recipients,
             lixi.is_active,
-            lixi.has_password  // Trả về thêm thông tin có password không
+            lixi.has_password,
+            lixi.protection_mode  // 0=none, 1=password, 2=nft
         )
     }
 
     // Check if lixi has password protection
     public fun is_password_protected(lixi: &LixiEnvelope): bool {
         lixi.has_password
+    }
+
+    // Check if lixi uses NFT ticket protection
+    public fun is_nft_protected(lixi: &LixiEnvelope): bool {
+        lixi.protection_mode == PROTECTION_NFT
+    }
+
+    // Get protection mode
+    public fun get_protection_mode(lixi: &LixiEnvelope): u8 {
+        lixi.protection_mode
     }
 
     // Check if address has claimed
