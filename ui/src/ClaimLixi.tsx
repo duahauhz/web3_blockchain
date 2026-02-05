@@ -27,6 +27,7 @@ export function ClaimLixi({ onBack }: ClaimLixiProps) {
 
   const [lixiId, setLixiId] = useState("");
   const [searchedLixiId, setSearchedLixiId] = useState("");
+  const [password, setPassword] = useState("");  // Mật khẩu để claim
   const [waitingForTxn, setWaitingForTxn] = useState(false);
   const [claimed, setClaimed] = useState(false);
   const [claimedAmount, setClaimedAmount] = useState("");
@@ -89,6 +90,7 @@ export function ClaimLixi({ onBack }: ClaimLixiProps) {
   const distributionMode = lixiData?.distribution_mode === 0 ? "Chia đều" : "May mắn";
   const expiryTimestamp = lixiData?.expiry_timestamp ? Number(lixiData.expiry_timestamp) : 0;
   const creatorAddress = lixiData?.creator || "";
+  const hasPassword = lixiData?.has_password || false;  // Kiểm tra có password không
 
   useEffect(() => {
     if (!expiryTimestamp) {
@@ -114,6 +116,7 @@ export function ClaimLixi({ onBack }: ClaimLixiProps) {
     return () => clearInterval(interval);
   }, [expiryTimestamp]);
 
+  // Auto-claim chỉ khi KHÔNG có password
   useEffect(() => {
     if (
       !searchedLixiId ||
@@ -122,7 +125,8 @@ export function ClaimLixi({ onBack }: ClaimLixiProps) {
       isPending ||
       waitingForTxn ||
       claimed ||
-      autoClaimedRef.current
+      autoClaimedRef.current ||
+      hasPassword  // KHÔNG auto-claim nếu có password
     ) {
       return;
     }
@@ -133,7 +137,7 @@ export function ClaimLixi({ onBack }: ClaimLixiProps) {
 
     autoClaimedRef.current = true;
     handleClaimLixi();
-  }, [searchedLixiId, currentAccount, lixiData, isPending, waitingForTxn, claimed, isActive]);
+  }, [searchedLixiId, currentAccount, lixiData, isPending, waitingForTxn, claimed, isActive, hasPassword]);
 
   const handleSearchLixi = () => {
     const trimmedId = lixiId.trim();
@@ -183,6 +187,12 @@ export function ClaimLixi({ onBack }: ClaimLixiProps) {
       return;
     }
 
+    // Kiểm tra password nếu cần
+    if (hasPassword && !password.trim()) {
+      setError("Lì xì này cần mật khẩu! Vui lòng nhập mật khẩu.");
+      return;
+    }
+
     // Không bắt buộc phải đăng nhập Google
     // Nếu có thì dùng email, không thì dùng wallet address
     const claimerEmail = user?.email || `${currentAccount?.address.slice(0, 8)}@wallet.sui` || 'anonymous@sui.wallet';
@@ -201,6 +211,7 @@ export function ClaimLixi({ onBack }: ClaimLixiProps) {
       arguments: [
         tx.object(searchedLixiId),
         tx.pure.string(claimerEmail),
+        tx.pure.string(password),  // Truyền password
         tx.object("0x6"), // Clock
       ],
     });
@@ -651,6 +662,12 @@ export function ClaimLixi({ onBack }: ClaimLixiProps) {
                         {isActive ? "Đang hoạt động" : "Đã kết thúc"}
                       </Text>
                     </Flex>
+                    <Flex justify="between" align="center">
+                      <Text size="2">🔒 Bảo mật</Text>
+                      <Text size="2" weight="bold" style={{ color: hasPassword ? "#ff6b35" : "#14a44d" }}>
+                        {hasPassword ? "Cần mật khẩu" : "Công khai"}
+                      </Text>
+                    </Flex>
                     {timeLeft && (
                       <Flex justify="between" align="center">
                         <Text size="2">⏳ Còn lại</Text>
@@ -660,6 +677,23 @@ export function ClaimLixi({ onBack }: ClaimLixiProps) {
                       </Flex>
                     )}
                   </Flex>
+
+                  {/* Password Input nếu lì xì cần mật khẩu */}
+                  {hasPassword && isActive && (
+                    <Box style={{ marginTop: "16px" }}>
+                      <Text size="2" weight="medium" style={{ marginBottom: "8px", display: "block" }}>
+                        🔐 Nhập mật khẩu để nhận lì xì:
+                      </Text>
+                      <TextField.Root
+                        type="password"
+                        placeholder="Nhập mật khẩu..."
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        size="3"
+                        style={{ marginBottom: "8px" }}
+                      />
+                    </Box>
+                  )}
 
                   {error && (
                     <Box style={{

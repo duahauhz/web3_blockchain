@@ -53,6 +53,7 @@ export function CreateLixi({ onBack, onCreated }: CreateLixiProps) {
   const [minAmount, setMinAmount] = useState("0.01");
   const [maxAmount, setMaxAmount] = useState("1");
   const [message, setMessage] = useState("");
+  const [password, setPassword] = useState("");  // Mật khẩu bảo vệ
   const [expiryHours, setExpiryHours] = useState("24");
   const [waitingForTxn, setWaitingForTxn] = useState(false);
   const [error, setError] = useState("");
@@ -166,6 +167,7 @@ export function CreateLixi({ onBack, onCreated }: CreateLixiProps) {
           tx.pure.u64(minInMist),
           tx.pure.u64(maxInMist),
           tx.pure.string(message),
+          tx.pure.string(password),  // Mật khẩu bảo vệ
           tx.pure.u64(expiryNum),
           tx.object("0x6"),
         ],
@@ -781,6 +783,27 @@ export function CreateLixi({ onBack, onCreated }: CreateLixiProps) {
                       size="3"
                       style={{ minHeight: "90px" }}
                     />
+                  </Box>
+
+                  <Separator my="2" style={{ background: "rgba(255, 164, 120, 0.22)" }} />
+
+                  {/* Password Protection */}
+                  <Box>
+                    <Flex gap="2" align="center" style={{ marginBottom: "8px" }}>
+                      <span style={{ fontSize: "16px" }}>🔒</span>
+                      <Text weight="medium">Mật khẩu bảo vệ</Text>
+                      <Text size="1" style={{ color: "#888" }}>(tùy chọn)</Text>
+                    </Flex>
+                    <TextField.Root
+                      type="password"
+                      placeholder="Để trống nếu không cần mật khẩu"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      size="3"
+                    />
+                    <Text size="1" style={{ color: "#888", marginTop: "6px", display: "block" }}>
+                      💡 Thêm mật khẩu để chỉ người biết mật khẩu mới nhận được lì xì
+                    </Text>
                   </Box>
 
                   {error && (

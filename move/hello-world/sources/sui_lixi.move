@@ -16,6 +16,7 @@ module hello_world::sui_lixi {
     const ELixiNotExpired: u64 = 5;
     const EInvalidAmount: u64 = 6;
     const ELixiLocked: u64 = 7;     // Lì xì đã bị khóa
+    const EWrongPassword: u64 = 8;  // Sai mật khẩu
 
     // ========== DISTRIBUTION MODES ==========
     const MODE_EQUAL: u8 = 0;      // Chia đều
@@ -42,6 +43,8 @@ module hello_world::sui_lixi {
         created_at: u64,
         expiry_timestamp: u64,
         is_active: bool,
+        secret_hash: vector<u8>,    // Hash của mật khẩu (blake2b256)
+        has_password: bool,         // Có dùng mật khẩu không
     }
 
     // Record của mỗi người claim
@@ -129,7 +132,7 @@ module hello_world::sui_lixi {
 
     // ========== MAIN FUNCTIONS ==========
 
-    // 1. Tạo bao lì xì
+    // 1. Tạo bao lì xì (với mật khẩu bảo vệ)
     public entry fun create_lixi(
         input_coin: Coin<SUI>,
         creator_email: String,
@@ -138,6 +141,7 @@ module hello_world::sui_lixi {
         min_amount: u64,      // Chỉ dùng cho random mode
         max_amount: u64,      // Chỉ dùng cho random mode
         message: String,
+        password: String,     // Mật khẩu bảo vệ (rỗng = không cần mật khẩu)
         expiry_hours: u64,    // Số giờ hết hạn
         clock: &Clock,
         ctx: &mut TxContext
@@ -155,9 +159,18 @@ module hello_world::sui_lixi {
         };
 
         let creator = ctx.sender();
-        let mut lixi_id = object::new(ctx);
+        let lixi_id = object::new(ctx);
         let current_time = sui::clock::timestamp_ms(clock);
         let expiry_timestamp = current_time + (expiry_hours * 60 * 60 * 1000);
+
+        // Hash password nếu có
+        let password_bytes = std::string::as_bytes(&password);
+        let has_password = vector::length(password_bytes) > 0;
+        let secret_hash = if (has_password) {
+            hash::blake2b256(password_bytes)
+        } else {
+            vector::empty<u8>()
+        };
 
         let lixi = LixiEnvelope {
             id: lixi_id,
@@ -176,6 +189,8 @@ module hello_world::sui_lixi {
             created_at: current_time,
             expiry_timestamp,
             is_active: true,
+            secret_hash,
+            has_password,
         };
 
         let id_inner = object::uid_to_inner(&lixi.id);
@@ -194,10 +209,11 @@ module hello_world::sui_lixi {
         transfer::share_object(lixi);
     }
 
-    // 2. Claim lì xì (mở bao)
+    // 2. Claim lì xì (mở bao) - cần nhập đúng mật khẩu
     public entry fun claim_lixi(
         lixi: &mut LixiEnvelope,
         claimer_email: String,
+        password: String,     // Mật khẩu (rỗng nếu không có password)
         clock: &Clock,
         ctx: &mut TxContext
     ) {
@@ -205,6 +221,13 @@ module hello_world::sui_lixi {
         
         // Check if locked
         assert!(lixi.is_active, ELixiLocked);
+        
+        // Verify password nếu có
+        if (lixi.has_password) {
+            let password_bytes = std::string::as_bytes(&password);
+            let input_hash = hash::blake2b256(password_bytes);
+            assert!(input_hash == lixi.secret_hash, EWrongPassword);
+        };
         
         // Check expiry
         let current_time = sui::clock::timestamp_ms(clock);
@@ -350,14 +373,20 @@ module hello_world::sui_lixi {
     // ========== VIEW FUNCTIONS ==========
     
     // Get lixi stats
-    public fun get_lixi_info(lixi: &LixiEnvelope): (u64, u64, u64, u64, bool) {
+    public fun get_lixi_info(lixi: &LixiEnvelope): (u64, u64, u64, u64, bool, bool) {
         (
             lixi.total_amount,
             lixi.remaining_amount,
             lixi.claimed_count,
             lixi.max_recipients,
-            lixi.is_active
+            lixi.is_active,
+            lixi.has_password  // Trả về thêm thông tin có password không
         )
+    }
+
+    // Check if lixi has password protection
+    public fun is_password_protected(lixi: &LixiEnvelope): bool {
+        lixi.has_password
     }
 
     // Check if address has claimed
