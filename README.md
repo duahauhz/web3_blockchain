@@ -111,49 +111,77 @@
 
 ### 1️⃣ Luồng Gửi Quà (Gift Flow)
 
-```mermaid
-sequenceDiagram
-    participant S as 👤 Sender
-    participant UI as 🖥️ Frontend
-    participant BC as ⛓️ Blockchain
-    participant R as 👤 Recipient
-
-    S->>UI: 1. Nhập email + số SUI + tin nhắn
-    UI->>BC: 2. Gọi send_sui_gift_with_email()
-    BC-->>BC: 3. Tạo GiftBox object
-    BC-->>UI: 4. Emit GiftCreatedEvent
-    UI-->>S: 5. Trả về link claim
-
-    S->>R: 6. Gửi link qua email/chat
-    
-    R->>UI: 7. Mở link claim
-    UI->>R: 8. Hiện popup xác thực Google
-    R->>UI: 9. Đăng nhập Google
-    UI->>BC: 10. Gọi open_and_claim_with_zklogin()
-    BC-->>BC: 11. Verify email + transfer SUI
-    BC-->>R: 12. Nhận SUI vào ví
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                           GIFT FLOW                                          │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  [SENDER]                    [FRONTEND]                   [BLOCKCHAIN]       │
+│     │                            │                             │             │
+│     │  1. Nhập email + SUI       │                             │             │
+│     │ ─────────────────────────► │                             │             │
+│     │                            │  2. send_sui_gift_email()   │             │
+│     │                            │ ──────────────────────────► │             │
+│     │                            │                             │             │
+│     │                            │  3. GiftBox created         │             │
+│     │                            │ ◄────────────────────────── │             │
+│     │  4. Nhận link claim        │                             │             │
+│     │ ◄───────────────────────── │                             │             │
+│     │                                                                        │
+│     │  5. Gửi link cho người nhận                                           │
+│     │ ────────────────────────────────────────────────────────► [RECIPIENT] │
+│                                                                      │       │
+│                                  │  6. Mở link claim                 │       │
+│                                  │ ◄─────────────────────────────────│       │
+│                                  │  7. Popup xác thực Google         │       │
+│                                  │ ──────────────────────────────────►       │
+│                                  │  8. Đăng nhập thành công          │       │
+│                                  │ ◄──────────────────────────────────       │
+│                                  │  9. open_and_claim()              │       │
+│                                  │ ──────────────────────────────────►       │
+│                                  │                             │             │
+│                                  │  10. Verify + Transfer SUI  │             │
+│                                  │ ◄────────────────────────── │             │
+│                                  │  11. SUI vào ví             │             │
+│                                  │ ──────────────────────────────► [RECIPIENT]
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### 2️⃣ Luồng Tạo Lì Xì (Lixi Flow)
 
-```mermaid
-sequenceDiagram
-    participant C as 👤 Creator
-    participant UI as 🖥️ Frontend
-    participant BC as ⛓️ Blockchain
-    participant U as 👥 Users
-
-    C->>UI: 1. Nhập số SUI + số lượng + chế độ
-    UI->>BC: 2. Gọi create_lixi()
-    BC-->>BC: 3. Tạo LixiEnvelope (shared)
-    BC-->>UI: 4. Trả về link claim
-
-    C->>U: 5. Chia sẻ link
-
-    U->>UI: 6. Mở link claim
-    UI->>BC: 7. Gọi claim_lixi()
-    BC-->>BC: 8. Calculate amount (equal/random)
-    BC-->>U: 9. Transfer SUI
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                           LIXI FLOW                                          │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  [CREATOR]                   [FRONTEND]                   [BLOCKCHAIN]       │
+│     │                            │                             │             │
+│     │  1. Nhập SUI + số lượng    │                             │             │
+│     │ ─────────────────────────► │                             │             │
+│     │                            │  2. create_lixi()           │             │
+│     │                            │ ──────────────────────────► │             │
+│     │                            │                             │             │
+│     │                            │  3. LixiEnvelope created    │             │
+│     │                            │ ◄────────────────────────── │             │
+│     │  4. Nhận link claim        │                             │             │
+│     │ ◄───────────────────────── │                             │             │
+│     │                                                                        │
+│     │  5. Chia sẻ link cho mọi người                                        │
+│     │ ────────────────────────────────────────────────────────► [USERS]     │
+│                                                                    │         │
+│                                  │  6. Mở link claim              │         │
+│                                  │ ◄──────────────────────────────│         │
+│                                  │  7. claim_lixi()              │          │
+│                                  │ ──────────────────────────────►          │
+│                                  │                             │             │
+│                                  │  8. Calculate (equal/random)│             │
+│                                  │  9. Transfer SUI            │             │
+│                                  │ ◄────────────────────────── │             │
+│                                  │  10. SUI vào ví             │             │
+│                                  │ ──────────────────────────────► [USERS]  │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### 3️⃣ Luồng Thông Báo (Notification Flow)
