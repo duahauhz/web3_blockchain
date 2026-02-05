@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Link Sharing Flow</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-box {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin: 20px 0;
+        }
+        h1 {
+            color: #ff6b35;
+        }
+        .step {
+            background: #fff3cd;
+            padding: 15px;
+            border-left: 4px solid #ffc107;
+            margin: 15px 0;
+        }
+        input, button {
+            width: 100%;
+            padding: 15px;
+            margin: 10px 0;
+            font-size: 16px;
+            border-radius: 8px;
+            border: 2px solid #ddd;
+        }
+        button {
+            background: linear-gradient(135deg, #ff6b35 0%, #f7931e 100%);
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        button:hover {
+            opacity: 0.9;
+        }
+        .result {
+            background: #e7f5ff;
+            padding: 15px;
+            border-left: 4px solid #228be6;
+            margin: 15px 0;
+            word-break: break-all;
+        }
+        .error {
+            background: #ffe0e0;
+            padding: 15px;
+            border-left: 4px solid #dc3545;
+            margin: 15px 0;
+        }
+        .success {
+            background: #d4edda;
+            padding: 15px;
+            border-left: 4px solid #28a745;
+            margin: 15px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-box">
+        <h1>🧪 Test Link Sharing Flow</h1>
+        <p>Test xem flow tạo link và chia sẻ có hoạt động không</p>
+
+        <div class="step">
+            <h3>Bước 1: Simulate tạo Lì Xì thành công</h3>
+            <p>Giả lập ID sau khi tạo lì xì:</p>
+            <input type="text" id="lixiId" value="0xabc123def456789" placeholder="Nhập Lixi ID">
+            <button onclick="generateLink()">🔗 Tạo Link Chia Sẻ</button>
+        </div>
+
+        <div id="linkResult" style="display:none;" class="result">
+            <h4>✅ Link đã tạo:</h4>
+            <p id="generatedLink" style="font-family: monospace;"></p>
+            <button onclick="copyLink()">📋 Copy Link</button>
+            <button onclick="openLink()">🌐 Mở Link (Tab Mới)</button>
+        </div>
+
+        <div class="step">
+            <h3>Bước 2: Test Parse URL Query</h3>
+            <p>Test xem URL có parse đúng query parameter không:</p>
+            <input type="text" id="testUrl" value="http://localhost:5173/claim-lixi?id=0xabc123" placeholder="Nhập URL để test">
+            <button onclick="parseUrl()">🔍 Parse URL</button>
+        </div>
+
+        <div id="parseResult" style="display:none;"></div>
+
+        <div class="step">
+            <h3>Bước 3: Test trong App Thực</h3>
+            <ol>
+                <li>Mở <a href="http://localhost:5173" target="_blank">http://localhost:5173</a></li>
+                <li>Connect Sui Wallet</li>
+                <li>Click "🧧 Tạo Lì Xì Nhóm"</li>
+                <li>Sau khi tạo thành công, kiểm tra:
+                    <ul>
+                        <li>✅ Có hiển thị link đầy đủ không?</li>
+                        <li>✅ Có nút "Copy Link" không?</li>
+                        <li>✅ Click Copy có hiển thị alert không?</li>
+                    </ul>
+                </li>
+                <li>Paste link vào tab mới</li>
+                <li>Kiểm tra Lixi ID có tự động điền không</li>
+            </ol>
+        </div>
+
+        <div class="success">
+            <h4>✅ Xác nhận các warnings trong Console</h4>
+            <p><strong>Những warnings sau đây là BÌNH THƯỜNG, không ảnh hưởng tính năng:</strong></p>
+            <ul>
+                <li>"Download the React DevTools" - Chỉ là khuyến nghị cài extension</li>
+                <li>"Could not establish connection" - Lỗi từ Chrome extension, không liên quan app</li>
+                <li>"[NEW] Explain Console errors" - Quảng cáo tính năng Edge Copilot</li>
+            </ul>
+            <p><strong>Nếu thấy lỗi khác màu ĐỎ, hãy copy và gửi cho tôi!</strong></p>
+        </div>
+
+        <div class="error">
+            <h4>❌ Nếu tính năng KHÔNG hoạt động, kiểm tra:</h4>
+            <ol>
+                <li><strong>Không thấy nút "Tạo Lì Xì Nhóm":</strong>
+                    <ul>
+                        <li>Đảm bảo đã connect wallet</li>
+                        <li>Refresh trang (Ctrl+R)</li>
+                        <li>Check HomePage.tsx có render đúng không</li>
+                    </ul>
+                </li>
+                <li><strong>Click nút không có phản ứng:</strong>
+                    <ul>
+                        <li>Mở DevTools Console (F12)</li>
+                        <li>Xem có lỗi gì màu ĐỎ không</li>
+                        <li>Check Router có hoạt động không</li>
+                    </ul>
+                </li>
+                <li><strong>Không thấy trang Success sau khi tạo:</strong>
+                    <ul>
+                        <li>Transaction có thành công không?</li>
+                        <li>Check callback onCreated có được gọi không</li>
+                        <li>Check App.tsx state currentPage</li>
+                    </ul>
+                </li>
+                <li><strong>Link không có query parameter:</strong>
+                    <ul>
+                        <li>Check createdGiftId có null không</li>
+                        <li>Check template string trong claimLink</li>
+                    </ul>
+                </li>
+            </ol>
+        </div>
+
+        <div class="test-box" style="background: #e3f2fd;">
+            <h3>🎯 Test Checklist</h3>
+            <label><input type="checkbox"> Đã connect Sui Wallet</label><br>
+            <label><input type="checkbox"> Thấy nút "🧧 Tạo Lì Xì Nhóm"</label><br>
+            <label><input type="checkbox"> Click nút → Chuyển sang form tạo lì xì</label><br>
+            <label><input type="checkbox"> Điền form → Confirm transaction thành công</label><br>
+            <label><input type="checkbox"> Hiển thị trang Success với emoji 🧧</label><br>
+            <label><input type="checkbox"> Hiển thị link đầy đủ có ?id=</label><br>
+            <label><input type="checkbox"> Click "Copy Link" → Alert xuất hiện</label><br>
+            <label><input type="checkbox"> Paste link tab mới → ID tự động điền</label><br>
+            <label><input type="checkbox"> Click "Tìm Lì Xì" → Hiển thị thông tin</label><br>
+            <label><input type="checkbox"> Click "Mở Bao Lì Xì" → Nhận được tiền</label><br>
+        </div>
+    </div>
+
+    <script>
+        const BASE_URL = 'http://localhost:5173';
+
+        function generateLink() {
+            const lixiId = document.getElementById('lixiId').value;
+            if (!lixiId) {
+                alert('Vui lòng nhập Lixi ID!');
+                return;
+            }
+
+            const link = `${BASE_URL}/claim-lixi?id=${lixiId}`;
+            document.getElementById('generatedLink').textContent = link;
+            document.getElementById('linkResult').style.display = 'block';
+            
+            console.log('✅ Link generated:', link);
+        }
+
+        function copyLink() {
+            const link = document.getElementById('generatedLink').textContent;
+            navigator.clipboard.writeText(link).then(() => {
+                alert('✅ Đã copy link!');
+            }).catch(err => {
+                alert('❌ Lỗi copy: ' + err);
+            });
+        }
+
+        function openLink() {
+            const link = document.getElementById('generatedLink').textContent;
+            window.open(link, '_blank');
+        }
+
+        function parseUrl() {
+            const url = document.getElementById('testUrl').value;
+            const resultDiv = document.getElementById('parseResult');
+            
+            try {
+                const urlObj = new URL(url);
+                const id = urlObj.searchParams.get('id');
+                const pathname = urlObj.pathname;
+                
+                let html = '<div class="result">';
+                html += '<h4>✅ Parse thành công:</h4>';
+                html += `<p><strong>Full URL:</strong> ${url}</p>`;
+                html += `<p><strong>Protocol:</strong> ${urlObj.protocol}</p>`;
+                html += `<p><strong>Host:</strong> ${urlObj.host}</p>`;
+                html += `<p><strong>Pathname:</strong> ${pathname}</p>`;
+                html += `<p><strong>Query:</strong> ${urlObj.search}</p>`;
+                html += `<p><strong>ID Parameter:</strong> ${id || '(không có)'}</p>`;
+                
+                if (id) {
+                    html += '<div class="success">';
+                    html += `<p>✅ Query parameter 'id' tìm thấy: <code>${id}</code></p>`;
+                    html += '<p>Đây là giá trị sẽ được tự động điền vào form!</p>';
+                    html += '</div>';
+                } else {
+                    html += '<div class="error">';
+                    html += '<p>❌ Không tìm thấy query parameter "id"!</p>';
+                    html += '<p>URL phải có format: /claim-lixi?id=0x...</p>';
+                    html += '</div>';
+                }
+                
+                html += '</div>';
+                resultDiv.innerHTML = html;
+                resultDiv.style.display = 'block';
+                
+                console.log('Parse result:', {
+                    url, pathname, query: urlObj.search, id
+                });
+            } catch (e) {
+                resultDiv.innerHTML = `<div class="error"><h4>❌ Lỗi parse URL:</h4><p>${e.message}</p></div>`;
+                resultDiv.style.display = 'block';
+            }
+        }
+
+        // Auto test on load
+        window.onload = function() {
+            console.log('🧪 Test page loaded');
+            console.log('Base URL:', BASE_URL);
+            console.log('Current URL:', window.location.href);
+            
+            // Test URLSearchParams
+            const testUrl = 'http://localhost:5173/claim-lixi?id=0xtest123';
+            const params = new URLSearchParams(new URL(testUrl).search);
+            console.log('Test parse ID:', params.get('id'));
+        };
+    </script>
+</body>
+</html>

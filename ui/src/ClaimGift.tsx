@@ -2,16 +2,18 @@ import {
   useSignAndExecuteTransaction,
   useSuiClient,
   useSuiClientQuery,
+  useCurrentAccount,
 } from "@mysten/dapp-kit";
 import type { SuiObjectData } from "@mysten/sui/client";
 import { Transaction } from "@mysten/sui/transactions";
 import { Box, Button, Container, Flex, Heading, Text, TextField } from "@radix-ui/themes";
 import { useNetworkVariable } from "./networkConfig";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Gift, ArrowLeft, Sparkles } from "lucide-react";
+import { ArrowLeft, Sparkles } from "lucide-react";
 import ClipLoader from "react-spinners/ClipLoader";
 import confetti from "canvas-confetti";
+import { useAuth } from "./contexts/AuthContext";
 
 interface ClaimGiftProps {
   onBack: () => void;
@@ -20,7 +22,9 @@ interface ClaimGiftProps {
 export function ClaimGift({ onBack }: ClaimGiftProps) {
   const packageId = useNetworkVariable("helloWorldPackageId");
   const suiClient = useSuiClient();
+  const currentAccount = useCurrentAccount();
   const { mutate: signAndExecute } = useSignAndExecuteTransaction();
+  const { user } = useAuth();
 
   const [giftId, setGiftId] = useState("");
   const [searchedGiftId, setSearchedGiftId] = useState("");
@@ -28,7 +32,17 @@ export function ClaimGift({ onBack }: ClaimGiftProps) {
   const [isOpened, setIsOpened] = useState(false);
   const [error, setError] = useState("");
 
-  const { data, isPending, error: queryError, refetch } = useSuiClientQuery(
+  // Tự động điền Gift ID từ URL query parameter
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const idFromUrl = params.get('id');
+    if (idFromUrl) {
+      setGiftId(idFromUrl);
+      setSearchedGiftId(idFromUrl);
+    }
+  }, []);
+
+  const { data, isPending, error: queryError } = useSuiClientQuery(
     "getObject",
     {
       id: searchedGiftId,
@@ -86,15 +100,32 @@ export function ClaimGift({ onBack }: ClaimGiftProps) {
   const handleOpenGift = () => {
     if (!searchedGiftId) return;
 
+    if (giftData?.recipient_email && !user?.email) {
+      setError("Vui lòng đăng nhập để xác nhận nhận quà!");
+      return;
+    }
+
     setWaitingForTxn(true);
     setError("");
 
     const tx = new Transaction();
 
-    tx.moveCall({
-      target: `${packageId}::gifting::open_and_claim`,
-      arguments: [tx.object(searchedGiftId)],
-    });
+    if (giftData?.recipient_email) {
+      const recipientEmailProof = user?.email || "legacy@recipient.com";
+      tx.moveCall({
+        target: `${packageId}::gifting::open_and_claim_with_zklogin`,
+        arguments: [
+          tx.object(searchedGiftId),
+          tx.pure.string(recipientEmailProof),
+          tx.object("0x6"),
+        ],
+      });
+    } else {
+      tx.moveCall({
+        target: `${packageId}::gifting::open_and_claim`,
+        arguments: [tx.object(searchedGiftId)],
+      });
+    }
 
     signAndExecute(
       {
@@ -124,12 +155,61 @@ export function ClaimGift({ onBack }: ClaimGiftProps) {
     );
   };
 
+  const handleRejectGift = () => {
+    if (!searchedGiftId) return;
+    if (!giftData?.recipient_email) {
+      setError("Không thể hoàn quà legacy. Vui lòng nhận quà.");
+      return;
+    }
+
+    if (!user?.email) {
+      setError("Vui lòng đăng nhập để hoàn quà!");
+      return;
+    }
+
+    const recipientEmailProof = user.email;
+
+    setWaitingForTxn(true);
+    setError("");
+
+    const tx = new Transaction();
+    tx.moveCall({
+      target: `${packageId}::gifting::reject_and_refund`,
+      arguments: [tx.object(searchedGiftId), tx.pure.string(recipientEmailProof)],
+    });
+
+    signAndExecute(
+      { transaction: tx },
+      {
+        onSuccess: (result) => {
+          suiClient
+            .waitForTransaction({ digest: result.digest })
+            .then(() => {
+              setWaitingForTxn(false);
+              setIsOpened(true);
+            })
+            .catch((err) => {
+              console.error(err);
+              setError("Không thể hoàn lại quà. Vui lòng thử lại!");
+              setWaitingForTxn(false);
+            });
+        },
+        onError: (err) => {
+          console.error(err);
+          setError("Không thể hoàn lại quà. Vui lòng thử lại!");
+          setWaitingForTxn(false);
+        },
+      }
+    );
+  };
+
   const getGiftFields = (data: SuiObjectData) => {
     if (data.content?.dataType !== "moveObject") {
       return null;
     }
     return data.content.fields as {
       sender: string;
+      recipient_email?: string;
       message: string;
       is_opened: boolean;
       content: { fields: { balance: string } };
@@ -137,6 +217,7 @@ export function ClaimGift({ onBack }: ClaimGiftProps) {
   };
 
   const giftData = data?.data ? getGiftFields(data.data) : null;
+  const canReject = Boolean(giftData?.recipient_email || user?.email || currentAccount?.address);
   const suiAmount = giftData?.content?.fields?.balance
     ? (parseInt(giftData.content.fields.balance) / 1_000_000_000).toFixed(4)
     : "0";
@@ -150,30 +231,59 @@ export function ClaimGift({ onBack }: ClaimGiftProps) {
         overflow: "hidden",
       }}
     >
-      {/* Animated Background Stars */}
-      {[...Array(25)].map((_, i) => (
+      {/* Animated Background Particles */}
+      {[...Array(20)].map((_, i) => (
         <motion.div
           key={i}
           animate={{
-            scale: [0, 1.5, 0],
-            opacity: [0, 0.6, 0],
-            rotate: [0, 180, 360],
+            x: [0, Math.random() * 200 - 100, 0],
+            y: [0, Math.random() * 200 - 100, 0],
+            opacity: [0.1, 0.3, 0.1],
+            scale: [1, 1.5, 1],
           }}
           transition={{
-            duration: 3 + Math.random() * 2,
+            duration: 4 + Math.random() * 3,
             repeat: Infinity,
-            delay: i * 0.2,
+            ease: "easeInOut",
+            delay: i * 0.15,
           }}
           style={{
             position: "absolute",
             top: `${Math.random() * 100}%`,
             left: `${Math.random() * 100}%`,
-            width: "6px",
-            height: "6px",
+            width: "8px",
+            height: "8px",
             borderRadius: "50%",
-            background: i % 2 === 0 ? "#ff6b35" : "#f7931e",
-            boxShadow: `0 0 15px ${i % 2 === 0 ? "#ff6b35" : "#f7931e"}`,
+            background: i % 3 === 0 ? "#ff6b35" : i % 3 === 1 ? "#f7931e" : "#ffa500",
+            boxShadow: `0 0 15px ${i % 3 === 0 ? "#ff6b35" : i % 3 === 1 ? "#f7931e" : "#ffa500"}`,
             filter: "blur(1px)",
+          }}
+        />
+      ))}
+
+      {/* Floating geometric shapes */}
+      {[...Array(8)].map((_, i) => (
+        <motion.div
+          key={`shape-${i}`}
+          animate={{
+            y: [0, -30, 0],
+            rotate: [0, 180, 360],
+            opacity: [0.05, 0.15, 0.05],
+          }}
+          transition={{
+            duration: 8 + i * 0.5,
+            repeat: Infinity,
+            ease: "easeInOut",
+            delay: i * 0.5,
+          }}
+          style={{
+            position: "absolute",
+            top: `${10 + i * 12}%`,
+            left: `${5 + (i % 2) * 85}%`,
+            width: `${40 + i * 5}px`,
+            height: `${40 + i * 5}px`,
+            borderRadius: i % 2 === 0 ? "50%" : "15%",
+            border: `2px solid ${i % 2 === 0 ? "#ff6b35" : "#f7931e"}`,
           }}
         />
       ))}
@@ -379,51 +489,65 @@ export function ClaimGift({ onBack }: ClaimGiftProps) {
                     )}
 
                     {/* Open Button */}
-                    <motion.div
-                      whileHover={{ scale: 1.05, y: -3 }}
-                      whileTap={{ scale: 0.95 }}
-                      style={{ width: "100%" }}
-                    >
+                    <Flex direction="column" gap="2" style={{ width: "100%" }}>
+                      <motion.div
+                        whileHover={{ scale: 1.05, y: -3 }}
+                        whileTap={{ scale: 0.95 }}
+                        style={{ width: "100%" }}
+                      >
+                        <Button
+                          size="4"
+                          onClick={handleOpenGift}
+                          disabled={waitingForTxn}
+                          style={{
+                            background: waitingForTxn 
+                              ? "#ccc"
+                              : "linear-gradient(135deg, #ff6b35 0%, #f7931e 100%)",
+                            color: "white",
+                            padding: "2rem 3rem",
+                            fontSize: "1.3rem",
+                            fontWeight: 900,
+                            borderRadius: "20px",
+                            cursor: waitingForTxn ? "not-allowed" : "pointer",
+                            border: "none",
+                            width: "100%",
+                            boxShadow: "0 20px 50px rgba(255, 107, 53, 0.5)",
+                            letterSpacing: "0.5px",
+                          }}
+                        >
+                          {waitingForTxn ? (
+                            <Flex align="center" justify="center" gap="2">
+                              <ClipLoader size={24} color="white" />
+                              Đang mở quà...
+                            </Flex>
+                          ) : (
+                            <motion.span
+                              animate={{
+                                scale: [1, 1.05, 1],
+                              }}
+                              transition={{
+                                duration: 1,
+                                repeat: Infinity,
+                              }}
+                            >
+                              🎉 MỞ QUÀ NGAY!
+                            </motion.span>
+                          )}
+                        </Button>
+                      </motion.div>
                       <Button
-                        size="4"
-                        onClick={handleOpenGift}
-                        disabled={waitingForTxn}
+                        onClick={handleRejectGift}
+                        disabled={waitingForTxn || !canReject}
+                        size="3"
+                        variant="soft"
                         style={{
-                          background: waitingForTxn 
-                            ? "#ccc"
-                            : "linear-gradient(135deg, #ff6b35 0%, #f7931e 100%)",
-                          color: "white",
-                          padding: "2rem 3rem",
-                          fontSize: "1.3rem",
-                          fontWeight: 900,
-                          borderRadius: "20px",
-                          cursor: waitingForTxn ? "not-allowed" : "pointer",
-                          border: "none",
-                          width: "100%",
-                          boxShadow: "0 20px 50px rgba(255, 107, 53, 0.5)",
-                          letterSpacing: "0.5px",
+                          borderColor: "rgba(255, 107, 53, 0.4)",
+                          color: "#ff6b35",
                         }}
                       >
-                        {waitingForTxn ? (
-                          <Flex align="center" justify="center" gap="2">
-                            <ClipLoader size={24} color="white" />
-                            Đang mở quà...
-                          </Flex>
-                        ) : (
-                          <motion.span
-                            animate={{
-                              scale: [1, 1.05, 1],
-                            }}
-                            transition={{
-                              duration: 1,
-                              repeat: Infinity,
-                            }}
-                          >
-                            🎉 MỞ QUÀ NGAY!
-                          </motion.span>
-                        )}
+                        Hoàn lại người gửi
                       </Button>
-                    </motion.div>
+                    </Flex>
                   </Flex>
                 )}
               </Box>

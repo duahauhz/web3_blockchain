@@ -4,12 +4,15 @@ import { useSignAndExecuteTransaction, useSuiClient, useCurrentAccount } from "@
 import { useNetworkVariable } from "./networkConfig";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Gift, ArrowLeft, Send, Sparkles, Package, User, MessageCircle, Wallet } from "lucide-react";
+import { Gift, ArrowLeft, Send, Sparkles, Package, User, MessageCircle, Wallet, Clock } from "lucide-react";
 import ClipLoader from "react-spinners/ClipLoader";
+import { useAuth } from "./contexts/AuthContext";
+import { useNotifications } from "./contexts/NotificationContext";
+import toast from "react-hot-toast";
 
 interface CreateGiftProps {
   onBack: () => void;
-  onCreated: (id: string) => void;
+  onCreated: (id: string, type: 'gift') => void;
 }
 
 export function CreateGift({ onBack, onCreated }: CreateGiftProps) {
@@ -17,16 +20,25 @@ export function CreateGift({ onBack, onCreated }: CreateGiftProps) {
   const suiClient = useSuiClient();
   const currentAccount = useCurrentAccount();
   const { mutate: signAndExecute } = useSignAndExecuteTransaction();
+  const { user } = useAuth();
+  const { addNotification, addHistoryEntry } = useNotifications();
 
-  const [recipient, setRecipient] = useState("");
+  const [recipientEmail, setRecipientEmail] = useState("");
   const [amount, setAmount] = useState("");
   const [message, setMessage] = useState("");
+  const [expiryDays, setExpiryDays] = useState("3");
   const [waitingForTxn, setWaitingForTxn] = useState(false);
   const [error, setError] = useState("");
 
   const handleSendGift = () => {
-    if (!recipient || !amount || !message) {
+    if (!recipientEmail || !amount || !message) {
       setError("Vui lòng điền đầy đủ thông tin!");
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(recipientEmail)) {
+      setError("Email người nhận không hợp lệ!");
       return;
     }
 
@@ -44,12 +56,18 @@ export function CreateGift({ onBack, onCreated }: CreateGiftProps) {
     const amountInMist = Math.floor(amountNum * 1_000_000_000);
     const [coin] = tx.splitCoins(tx.gas, [amountInMist]);
 
+    const senderEmail = user?.email || `${currentAccount?.address.slice(0, 8)}@wallet.sui`;
+    const expiryNum = Math.max(0, parseInt(expiryDays, 10) || 0);
+
     tx.moveCall({
-      target: `${packageId}::gifting::send_sui_gift`,
+      target: `${packageId}::gifting::send_sui_gift_with_email`,
       arguments: [
         coin,
         tx.pure.string(message),
-        tx.pure.address(recipient),
+        tx.pure.string(senderEmail),
+        tx.pure.string(recipientEmail),
+        tx.pure.u64(expiryNum),
+        tx.object("0x6"),
       ],
     });
 
@@ -71,7 +89,27 @@ export function CreateGift({ onBack, onCreated }: CreateGiftProps) {
               
               if (createdObjects && createdObjects.length > 0) {
                 const giftBoxId = (createdObjects[0] as any).objectId;
-                onCreated(giftBoxId);
+                
+                // Add immediate notification
+                addNotification({
+                  type: 'gift_sent',
+                  title: 'Quà đã gửi',
+                  message: `Đã gửi ${amount} SUI tới ${recipientEmail}.`,
+                  giftId: giftBoxId,
+                  amount: amount,
+                  txDigest: txResult.digest,
+                });
+                addHistoryEntry({
+                  title: 'Gửi quà',
+                  amount: `-${amount} SUI`,
+                  direction: 'debit',
+                });
+                
+                toast.success(`🎁 Đã gửi quà ${amount} SUI!`, {
+                  duration: 4000,
+                });
+                
+                onCreated(giftBoxId, 'gift');
               }
               setWaitingForTxn(false);
             })
@@ -91,7 +129,7 @@ export function CreateGift({ onBack, onCreated }: CreateGiftProps) {
           if (err.message && (err.message.includes("No valid gas coins") || err.message.includes("Insufficient"))) {
             errorMessage = "❌ Ví không có SUI! Vui lòng:\n\n1️⃣ Click nút 'Lấy Testnet SUI' ở góc trên\n2️⃣ Hoặc truy cập: https://faucet.sui.io\n3️⃣ Paste địa chỉ ví và lấy SUI miễn phí";
           } else if (err.message && err.message.includes("Invalid")) {
-            errorMessage = "Địa chỉ người nhận không hợp lệ!";
+            errorMessage = "Email người nhận không hợp lệ!";
           } else if (err.message) {
             errorMessage += err.message;
           } else {
@@ -340,14 +378,14 @@ export function CreateGift({ onBack, onCreated }: CreateGiftProps) {
                   <Flex align="center" gap="2" mb="2">
                     <User size={18} color="#ff6b35" />
                     <Text size="3" weight="bold" style={{ color: "#333" }}>
-                      Địa chỉ người nhận
+                      Email người nhận
                     </Text>
                   </Flex>
                   <TextField.Root
                     size="3"
-                    placeholder="0x..."
-                    value={recipient}
-                    onChange={(e) => setRecipient(e.target.value)}
+                    placeholder="friend@example.com"
+                    value={recipientEmail}
+                    onChange={(e) => setRecipientEmail(e.target.value)}
                     disabled={waitingForTxn}
                     style={{
                       borderRadius: "15px",
@@ -357,6 +395,9 @@ export function CreateGift({ onBack, onCreated }: CreateGiftProps) {
                       background: "rgba(255, 255, 255, 0.95)",
                     }}
                   />
+                  <Text size="2" style={{ color: "#999", marginTop: "0.5rem", display: "block" }}>
+                    💡 Người nhận cần đăng nhập để xác nhận nhận/hoàn quà.
+                  </Text>
                 </Box>
 
                 <Box>
@@ -384,6 +425,30 @@ export function CreateGift({ onBack, onCreated }: CreateGiftProps) {
                   <Text size="2" style={{ color: "#999", marginTop: "0.5rem", display: "block" }}>
                     💡 Số dư: {currentAccount ? "Kiểm tra trong ví" : "Chưa kết nối"}
                   </Text>
+                </Box>
+
+                <Box>
+                  <Flex align="center" gap="2" mb="2">
+                    <Clock size={18} color="#ff6b35" />
+                    <Text size="3" weight="bold" style={{ color: "#333" }}>
+                      Hết hạn sau (ngày)
+                    </Text>
+                  </Flex>
+                  <TextField.Root
+                    size="3"
+                    type="number"
+                    placeholder="3"
+                    value={expiryDays}
+                    onChange={(e) => setExpiryDays(e.target.value)}
+                    disabled={waitingForTxn}
+                    style={{
+                      borderRadius: "15px",
+                      border: "2px solid rgba(255, 107, 53, 0.2)",
+                      fontSize: "1rem",
+                      padding: "0.7rem",
+                      background: "rgba(255, 255, 255, 0.95)",
+                    }}
+                  />
                 </Box>
 
                 <Box>

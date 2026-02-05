@@ -2,9 +2,10 @@ import { ConnectButton, useCurrentAccount } from "@mysten/dapp-kit";
 import { Box, Button, Container, Flex, Heading, Text } from "@radix-ui/themes";
 import { motion } from "framer-motion";
 import { Gift, Sparkles, Zap, Shield, Users, TrendingUp, Github, Twitter, Mail } from "lucide-react";
+import { NotificationBell } from "./NotificationBell";
 
 interface HomePageProps {
-  onNavigate: (page: 'create' | 'claim') => void;
+  onNavigate: (page: 'create' | 'claim' | 'create-lixi' | 'claim-lixi' | 'lixi-manage' | 'transactions') => void;
 }
 
 export function HomePage({ onNavigate }: HomePageProps) {
@@ -111,18 +112,33 @@ export function HomePage({ onNavigate }: HomePageProps) {
 
         <Flex gap="3" align="center">
           {currentAccount && (
-            <Button
-              variant="soft" size="3"
-              onClick={() => window.open(`https://faucet.sui.io/?address=${currentAccount.address}`, '_blank')}
-              style={{
-                background: "linear-gradient(135deg, #ff6b35 0%, #f7931e 100%)",
-                color: "white", border: "none", fontWeight: 600,
-                boxShadow: "0 4px 15px rgba(255, 107, 53, 0.3)",
-              }}
-            >
-              <Sparkles size={18} />
-              Lấy Testnet SUI
-            </Button>
+            <>
+              <NotificationBell />
+              <Button
+                variant="soft" size="3"
+                onClick={() => onNavigate('transactions')}
+                style={{
+                  background: 'rgba(255, 107, 53, 0.1)',
+                  color: '#ff6b35',
+                  border: '2px solid rgba(255, 107, 53, 0.3)',
+                  fontWeight: 600,
+                }}
+              >
+                📒 Lịch sử
+              </Button>
+              <Button
+                variant="soft" size="3"
+                onClick={() => window.open(`https://faucet.sui.io/?address=${currentAccount.address}`, '_blank')}
+                style={{
+                  background: "linear-gradient(135deg, #ff6b35 0%, #f7931e 100%)",
+                  color: "white", border: "none", fontWeight: 600,
+                  boxShadow: "0 4px 15px rgba(255, 107, 53, 0.3)",
+                }}
+              >
+                <Sparkles size={18} />
+                Lấy Testnet SUI
+              </Button>
+            </>
           )}
           <ConnectButton />
         </Flex>
@@ -179,50 +195,53 @@ export function HomePage({ onNavigate }: HomePageProps) {
 
             {/* Main CTA Buttons */}
             {currentAccount ? (
-              <Flex gap="4" justify="center" wrap="wrap" style={{ marginBottom: "3rem" }}>
-                <motion.div 
-                  whileHover={{ scale: 1.05, y: -3 }} 
-                  whileTap={{ scale: 0.98 }}
-                  transition={{ type: "spring", stiffness: 400, damping: 17 }}
-                >
-                  <Button size="4" onClick={() => onNavigate('create')} style={{
-                    background: "linear-gradient(135deg, #ff6b35 0%, #f7931e 100%)",
-                    color: "white", padding: "2rem 4rem",
-                    fontSize: "1.3rem", fontWeight: 800, borderRadius: "20px",
-                    cursor: "pointer",
-                    boxShadow: "0 15px 40px rgba(255, 107, 53, 0.35)",
-                    border: "none",
-                    position: "relative",
-                    overflow: "hidden",
-                    letterSpacing: "0.5px",
-                  }}>
-                    <Flex align="center" gap="3">
-                      <Gift size={32} />
-                      Tạo hộp quà
-                    </Flex>
-                  </Button>
-                </motion.div>
-                
-                <motion.div 
-                  whileHover={{ scale: 1.05, y: -3 }} 
-                  whileTap={{ scale: 0.98 }}
-                  transition={{ type: "spring", stiffness: 400, damping: 17 }}
-                >
-                  <Button size="4" onClick={() => onNavigate('claim')} style={{
-                    background: "white",
-                    color: "#ff6b35", padding: "2rem 4rem",
-                    fontSize: "1.3rem", fontWeight: 800, borderRadius: "20px",
-                    cursor: "pointer", border: "3px solid #ff6b35",
-                    boxShadow: "0 15px 40px rgba(255, 107, 53, 0.2)",
-                    letterSpacing: "0.5px",
-                  }}>
-                    <Flex align="center" gap="3">
-                      <Sparkles size={32} />
-                      Nhận quà
-                    </Flex>
-                  </Button>
-                </motion.div>
-              </Flex>
+              <>
+                <Flex gap="4" justify="center" wrap="wrap" style={{ marginBottom: "2rem" }}>
+                  <motion.div 
+                    whileHover={{ scale: 1.05, y: -3 }} 
+                    whileTap={{ scale: 0.98 }}
+                    transition={{ type: "spring", stiffness: 400, damping: 17 }}
+                  >
+                    <Button size="4" onClick={() => onNavigate('create')} style={{
+                      background: "linear-gradient(135deg, #ff6b35 0%, #f7931e 100%)",
+                      color: "white", padding: "2rem 4rem",
+                      fontSize: "1.3rem", fontWeight: 800, borderRadius: "20px",
+                      cursor: "pointer",
+                      boxShadow: "0 15px 40px rgba(255, 107, 53, 0.35)",
+                      border: "none",
+                      position: "relative",
+                      overflow: "hidden",
+                      letterSpacing: "0.5px",
+                    }}>
+                      <Flex align="center" gap="3">
+                        <Gift size={32} />
+                        Tạo hộp quà
+                      </Flex>
+                    </Button>
+                  </motion.div>
+                  
+                  <motion.div 
+                    whileHover={{ scale: 1.05, y: -3 }} 
+                    whileTap={{ scale: 0.98 }}
+                    transition={{ type: "spring", stiffness: 400, damping: 17 }}
+                  >
+                    <Button size="4" onClick={() => onNavigate('claim')} style={{
+                      background: "white",
+                      color: "#ff6b35", padding: "2rem 4rem",
+                      fontSize: "1.3rem", fontWeight: 800, borderRadius: "20px",
+                      cursor: "pointer", border: "3px solid #ff6b35",
+                      boxShadow: "0 15px 40px rgba(255, 107, 53, 0.2)",
+                      letterSpacing: "0.5px",
+                    }}>
+                      <Flex align="center" gap="3">
+                        <Sparkles size={32} />
+                        Nhận quà
+                      </Flex>
+                    </Button>
+                  </motion.div>
+                </Flex>
+
+              </>
             ) : (
               <motion.div
                 initial={{ opacity: 0, scale: 0.95 }}
@@ -244,7 +263,6 @@ export function HomePage({ onNavigate }: HomePageProps) {
                 </Box>
               </motion.div>
             )}
-
             {/* Feature Highlights - Compact */}
             <Flex gap="6" justify="center" wrap="wrap" style={{ maxWidth: "900px", margin: "0 auto" }}>
               {[
@@ -354,6 +372,156 @@ export function HomePage({ onNavigate }: HomePageProps) {
           </motion.div>
         </Flex>
       </Container>
+
+      {/* Lì xì Section */}
+      <motion.section
+        initial={{ opacity: 0, y: 40 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, amount: 0.25 }}
+        transition={{ duration: 0.7 }}
+        style={{ padding: "5rem 0" }}
+      >
+        <Container size="4">
+          <Box
+            style={{
+              background: "linear-gradient(135deg, rgba(255, 255, 255, 0.96) 0%, rgba(255, 246, 236, 0.96) 100%)",
+              borderRadius: "32px",
+              padding: "3.5rem",
+              border: "2px solid rgba(255, 107, 53, 0.18)",
+              boxShadow: "0 35px 90px rgba(255, 107, 53, 0.2)",
+            }}
+          >
+            <Flex
+              align="center"
+              justify="between"
+              wrap="wrap"
+              gap="5"
+              style={{ rowGap: "3rem" }}
+            >
+              <Box style={{ flex: "1 1 340px", maxWidth: "540px" }}>
+                <Text size="2" weight="medium" style={{ color: "#f7931e", letterSpacing: "0.2em", textTransform: "uppercase" }}>
+                  Bao lì xì nhóm trên Sui
+                </Text>
+                <Heading size="8" style={{ color: "#1f1f1f", marginTop: "1rem", lineHeight: 1.2 }}>
+                  Chia sẻ may mắn cùng đồng đội trong mùa lễ hội
+                </Heading>
+                <Text size="3" style={{ color: "#6f6f6f", marginTop: "1.2rem", lineHeight: 1.75 }}>
+                  Dễ dàng tạo bao lì xì kỹ thuật số, chọn cách chia đều hoặc may mắn và gửi link cho mọi người nhận ngay trong ví Sui.
+                </Text>
+
+                <Flex gap="3" wrap="wrap" style={{ marginTop: "2.5rem" }}>
+                  <motion.div whileHover={{ scale: 1.04, y: -2 }} whileTap={{ scale: 0.97 }}>
+                    <Button
+                      size="3"
+                      onClick={() => onNavigate('create-lixi')}
+                      style={{
+                        background: "linear-gradient(135deg, #ff6b35 0%, #f7931e 100%)",
+                        color: "white",
+                        padding: "1.2rem 2.6rem",
+                        fontWeight: 700,
+                        borderRadius: "16px",
+                        border: "none",
+                        boxShadow: "0 18px 40px rgba(255, 107, 53, 0.28)",
+                        letterSpacing: "0.5px",
+                      }}
+                    >
+                      🧧 Tạo lì xì nhóm
+                    </Button>
+                  </motion.div>
+
+                  <motion.div whileHover={{ scale: 1.04, y: -2 }} whileTap={{ scale: 0.97 }}>
+                    <Button
+                      size="3"
+                      onClick={() => onNavigate('claim-lixi')}
+                      style={{
+                        background: "white",
+                        color: "#ff6b35",
+                        padding: "1.2rem 2.6rem",
+                        fontWeight: 700,
+                        borderRadius: "16px",
+                        border: "3px solid #ff6b35",
+                        boxShadow: "0 15px 35px rgba(255, 107, 53, 0.16)",
+                        letterSpacing: "0.5px",
+                      }}
+                    >
+                      💰 Nhận lì xì
+                    </Button>
+                  </motion.div>
+                </Flex>
+              </Box>
+
+              <motion.div
+                initial={{ rotate: -2, opacity: 0 }}
+                whileInView={{ rotate: 0, opacity: 1 }}
+                transition={{ duration: 0.6, type: "spring" }}
+                style={{ flex: "1 1 300px", maxWidth: "460px" }}
+              >
+                <Box
+                  style={{
+                    background: "linear-gradient(150deg, #fff7ed 0%, #ffe0c7 100%)",
+                    borderRadius: "24px",
+                    padding: "3rem 2.6rem",
+                    position: "relative",
+                    border: "1px solid rgba(255, 107, 53, 0.18)",
+                    boxShadow: "0 28px 65px rgba(255, 107, 53, 0.24)",
+                    overflow: "hidden",
+                  }}
+                >
+                  <motion.div
+                    animate={{ y: [0, -10, 0] }}
+                    transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+                    style={{
+                      position: "absolute",
+                      top: "-3rem",
+                      right: "-2rem",
+                      width: "200px",
+                      height: "200px",
+                      background: "rgba(255, 107, 53, 0.12)",
+                      borderRadius: "40%",
+                      filter: "blur(0.5px)",
+                    }}
+                  />
+
+                  <Text size="2" weight="medium" style={{ color: "#f7931e", letterSpacing: "0.3em", textTransform: "uppercase" }}>
+                    Xuân 2026
+                  </Text>
+                  <Heading size="9" style={{
+                    color: "#ff6b35",
+                    marginTop: "1.2rem",
+                    fontWeight: 900,
+                    lineHeight: 1,
+                  }}>
+                    Chúc mừng
+                    <br />
+                    Năm Mới
+                  </Heading>
+                  <Text size="3" style={{ color: "#6f6f6f", marginTop: "1.8rem", lineHeight: 1.8 }}>
+                    Chúc bạn một năm bứt phá, đầy niềm vui và thịnh vượng cùng SuiGift.
+                  </Text>
+
+                  <Flex gap="3" style={{ marginTop: "2rem" }}>
+                    {["May mắn", "An khang", "Thịnh vượng"].map((blessing) => (
+                      <Box
+                        key={blessing}
+                        style={{
+                          background: "rgba(255, 107, 53, 0.12)",
+                          color: "#ff6b35",
+                          padding: "0.6rem 1rem",
+                          borderRadius: "999px",
+                          fontSize: "0.85rem",
+                          fontWeight: 600,
+                        }}
+                      >
+                        {blessing}
+                      </Box>
+                    ))}
+                  </Flex>
+                </Box>
+              </motion.div>
+            </Flex>
+          </Box>
+        </Container>
+      </motion.section>
 
       {/* Footer */}
       <Box mt="9" py="8" style={{

@@ -1,0 +1,772 @@
+import {
+  useSignAndExecuteTransaction,
+  useSuiClient,
+  useSuiClientQuery,
+  useCurrentAccount,
+} from "@mysten/dapp-kit";
+import { Transaction } from "@mysten/sui/transactions";
+import { Box, Button, Container, Flex, Heading, Text, TextField } from "@radix-ui/themes";
+import { useNetworkVariable } from "./networkConfig";
+import { useState, useEffect, useRef } from "react";
+import { motion } from "framer-motion";
+import { Gift, ArrowLeft, Sparkles } from "lucide-react";
+import ClipLoader from "react-spinners/ClipLoader";
+import confetti from "canvas-confetti";
+import { useAuth } from "./contexts/AuthContext";
+
+interface ClaimLixiProps {
+  onBack: () => void;
+}
+
+export function ClaimLixi({ onBack }: ClaimLixiProps) {
+  const packageId = useNetworkVariable("helloWorldPackageId");
+  const suiClient = useSuiClient();
+  const currentAccount = useCurrentAccount();
+  const { user } = useAuth();
+  const { mutate: signAndExecute } = useSignAndExecuteTransaction();
+
+  const [lixiId, setLixiId] = useState("");
+  const [searchedLixiId, setSearchedLixiId] = useState("");
+  const [waitingForTxn, setWaitingForTxn] = useState(false);
+  const [claimed, setClaimed] = useState(false);
+  const [claimedAmount, setClaimedAmount] = useState("");
+  const [error, setError] = useState("");
+  const [isShaking, setIsShaking] = useState(false);
+  const autoClaimedRef = useRef(false);
+  const [timeLeft, setTimeLeft] = useState<string>("");
+
+  // Tự động điền Lixi ID từ URL query parameter (hỗ trợ hash route)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    let idFromUrl = params.get('id');
+
+    if (!idFromUrl && window.location.hash) {
+      const hashQuery = window.location.hash.split('?')[1];
+      if (hashQuery) {
+        const hashParams = new URLSearchParams(hashQuery);
+        idFromUrl = hashParams.get('id');
+      }
+    }
+
+    if (idFromUrl) {
+      setLixiId(idFromUrl);
+      setSearchedLixiId(idFromUrl);
+    }
+  }, []);
+
+  useEffect(() => {
+    autoClaimedRef.current = false;
+  }, [searchedLixiId]);
+
+  const { data, isPending, refetch } = useSuiClientQuery(
+    "getObject",
+    {
+      id: searchedLixiId,
+      options: {
+        showContent: true,
+        showOwner: true,
+      },
+    },
+    {
+      enabled: searchedLixiId.length > 0,
+    }
+  );
+
+  const lixiData = data?.data?.content?.dataType === "moveObject" 
+    ? (data.data.content.fields as any) 
+    : null;
+
+  const totalAmount = lixiData?.total_amount 
+    ? (parseInt(lixiData.total_amount) / 1_000_000_000).toFixed(4) 
+    : "0";
+  const remainingAmount = lixiData?.remaining_amount 
+    ? (parseInt(lixiData.remaining_amount) / 1_000_000_000).toFixed(4) 
+    : "0";
+  const claimedCount = lixiData?.claimed_count || 0;
+  const maxRecipients = lixiData?.max_recipients || 0;
+  const message = lixiData?.message || "";
+  const isActive = lixiData?.is_active || false;
+  const distributionMode = lixiData?.distribution_mode === 0 ? "Chia đều" : "May mắn";
+  const expiryTimestamp = lixiData?.expiry_timestamp ? Number(lixiData.expiry_timestamp) : 0;
+  const creatorAddress = lixiData?.creator || "";
+
+  useEffect(() => {
+    if (!expiryTimestamp) {
+      setTimeLeft("");
+      return;
+    }
+
+    const update = () => {
+      const now = Date.now();
+      const diff = expiryTimestamp - now;
+      if (diff <= 0) {
+        setTimeLeft("Đã hết hạn");
+        return;
+      }
+
+      const hours = Math.floor(diff / 3_600_000);
+      const minutes = Math.floor((diff % 3_600_000) / 60_000);
+      setTimeLeft(`${hours}h ${minutes}m`);
+    };
+
+    update();
+    const interval = setInterval(update, 60_000);
+    return () => clearInterval(interval);
+  }, [expiryTimestamp]);
+
+  useEffect(() => {
+    if (
+      !searchedLixiId ||
+      !currentAccount ||
+      !lixiData ||
+      isPending ||
+      waitingForTxn ||
+      claimed ||
+      autoClaimedRef.current
+    ) {
+      return;
+    }
+
+    if (!isActive) {
+      return;
+    }
+
+    autoClaimedRef.current = true;
+    handleClaimLixi();
+  }, [searchedLixiId, currentAccount, lixiData, isPending, waitingForTxn, claimed, isActive]);
+
+  const handleSearchLixi = () => {
+    const trimmedId = lixiId.trim();
+    if (!trimmedId) {
+      setError("Vui lòng nhập Lixi ID!");
+      return;
+    }
+    setError("");
+    setSearchedLixiId(trimmedId);
+  };
+
+  const triggerFireworks = () => {
+    const duration = 3000;
+    const animationEnd = Date.now() + duration;
+    const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 9999 };
+
+    function randomInRange(min: number, max: number) {
+      return Math.random() * (max - min) + min;
+    }
+
+    const interval: any = setInterval(function () {
+      const timeLeft = animationEnd - Date.now();
+      if (timeLeft <= 0) return clearInterval(interval);
+
+      const particleCount = 50 * (timeLeft / duration);
+      
+      confetti({
+        ...defaults,
+        particleCount,
+        origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 },
+        colors: ['#ff6b35', '#f7931e', '#ffd166'],
+      });
+      confetti({
+        ...defaults,
+        particleCount,
+        origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 },
+        colors: ['#ff6b35', '#f7931e', '#ffd166'],
+      });
+    }, 250);
+  };
+
+  const handleClaimLixi = () => {
+    if (!searchedLixiId) return;
+
+    if (!currentAccount) {
+      setError("Vui lòng kết nối ví Sui để nhận lì xì!");
+      return;
+    }
+
+    // Không bắt buộc phải đăng nhập Google
+    // Nếu có thì dùng email, không thì dùng wallet address
+    const claimerEmail = user?.email || `${currentAccount?.address.slice(0, 8)}@wallet.sui` || 'anonymous@sui.wallet';
+
+    // Shake animation
+    setIsShaking(true);
+    setTimeout(() => setIsShaking(false), 500);
+
+    setWaitingForTxn(true);
+    setError("");
+
+    const tx = new Transaction();
+
+    tx.moveCall({
+      target: `${packageId}::sui_lixi::claim_lixi`,
+      arguments: [
+        tx.object(searchedLixiId),
+        tx.pure.string(claimerEmail),
+        tx.object("0x6"), // Clock
+      ],
+    });
+
+    signAndExecute(
+      { transaction: tx },
+      {
+        onSuccess: (result) => {
+          suiClient
+            .waitForTransaction({ 
+              digest: result.digest,
+              options: { showEffects: true, showBalanceChanges: true }
+            })
+            .then((txResult) => {
+              // Get balance changes to determine claimed amount
+              const balanceChanges = txResult.balanceChanges?.filter(
+                (change: any) => change.owner?.AddressOwner === currentAccount?.address
+              );
+              
+              if (balanceChanges && balanceChanges.length > 0) {
+                const amount = Math.abs(parseInt(balanceChanges[0].amount)) / 1_000_000_000;
+                setClaimedAmount(amount.toFixed(4));
+              }
+
+              setClaimed(true);
+              triggerFireworks();
+              setWaitingForTxn(false);
+              
+              // Refresh lixi data
+              setTimeout(() => refetch(), 1000);
+            })
+            .catch((err) => {
+              console.error(err);
+              setError("Không thể mở lì xì!");
+              setWaitingForTxn(false);
+            });
+        },
+        onError: (err: any) => {
+          console.error(err);
+          let errorMessage = "Có lỗi xảy ra. ";
+
+          const message = err?.message || "";
+          const moveAbortMatch = message.match(/MoveAbort\([^)]*,\s*(\d+)\)/);
+          const moveAbortCode = moveAbortMatch ? Number(moveAbortMatch[1]) : null;
+
+          if (moveAbortCode === 1 || message.includes("ELixiExpired")) {
+            errorMessage = "🕒 Lì xì đã hết hạn!";
+          } else if (moveAbortCode === 7 || message.includes("ELixiLocked")) {
+            errorMessage = "🔒 Lì xì đã bị khóa bởi người tạo!";
+          } else if (moveAbortCode === 2 || message.includes("ELixiEmpty")) {
+            errorMessage = "😔 Lì xì đã hết hoặc không còn chỗ!";
+          } else if (moveAbortCode === 3 || message.includes("EAlreadyClaimed")) {
+            errorMessage = "⚠️ Bạn đã nhận lì xì này rồi!";
+          } else if (message) {
+            errorMessage += message;
+          }
+
+          setError(errorMessage);
+          setWaitingForTxn(false);
+        },
+      }
+    );
+  };
+
+  const handleReclaimLixi = () => {
+    if (!searchedLixiId || !currentAccount) return;
+
+    setWaitingForTxn(true);
+    setError("");
+
+    const tx = new Transaction();
+    tx.moveCall({
+      target: `${packageId}::sui_lixi::reclaim_expired_lixi`,
+      arguments: [tx.object(searchedLixiId), tx.object("0x6")],
+    });
+
+    signAndExecute(
+      { transaction: tx },
+      {
+        onSuccess: (result) => {
+          suiClient
+            .waitForTransaction({ digest: result.digest, options: { showEffects: true, showBalanceChanges: true } })
+            .then(() => {
+              setWaitingForTxn(false);
+              setTimeout(() => refetch(), 1000);
+            })
+            .catch((err) => {
+              console.error(err);
+              setError("Không thể hoàn lại lì xì!");
+              setWaitingForTxn(false);
+            });
+        },
+        onError: (err: any) => {
+          console.error(err);
+          setError("Không thể hoàn lại lì xì!");
+          setWaitingForTxn(false);
+        },
+      }
+    );
+  };
+
+  return (
+    <Box style={{
+      minHeight: "100vh",
+      background: "linear-gradient(135deg, #fff7f2 0%, #ffe9db 100%)",
+      padding: "56px 20px",
+      position: "relative",
+      overflow: "hidden",
+    }}>
+      {[...Array(14)].map((_, i) => (
+        <motion.div
+          key={`sparkle-claim-${i}`}
+          animate={{
+            x: [0, Math.random() * 140 - 70, 0],
+            y: [0, Math.random() * 140 - 70, 0],
+            opacity: [0.12, 0.3, 0.12],
+            scale: [1, 1.4, 1],
+          }}
+          transition={{
+            duration: 4 + Math.random() * 2.5,
+            repeat: Infinity,
+            ease: "easeInOut",
+            delay: i * 0.12,
+          }}
+          style={{
+            position: "absolute",
+            top: `${Math.random() * 100}%`,
+            left: `${Math.random() * 100}%`,
+            width: "7px",
+            height: "7px",
+            borderRadius: "50%",
+            background: i % 2 === 0 ? "#ff6b35" : "#f7931e",
+            boxShadow: `0 0 16px ${i % 2 === 0 ? "#ff6b35" : "#f7931e"}`,
+            filter: "blur(0.4px)",
+            pointerEvents: "none",
+          }}
+        />
+      ))}
+      <motion.div
+        aria-hidden
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.4, duration: 1.2 }}
+        style={{
+          position: "absolute",
+          inset: "-240px -180px auto auto",
+          width: "520px",
+          height: "520px",
+          background: "radial-gradient(circle at 30% 30%, rgba(255,107,53,0.2), transparent 60%)",
+          filter: "blur(2px)",
+        }}
+      />
+      {/* Floating decorations */}
+      <motion.div
+        style={{
+          position: "absolute",
+          top: "10%",
+          left: "5%",
+          fontSize: "80px",
+          opacity: 0.2,
+        }}
+        animate={{
+          y: [0, -20, 0],
+          rotate: [0, 10, 0],
+        }}
+        transition={{
+          duration: 3,
+          repeat: Infinity,
+        }}
+      >
+        🧧
+      </motion.div>
+      <motion.div
+        style={{
+          position: "absolute",
+          top: "60%",
+          right: "5%",
+          fontSize: "60px",
+          opacity: 0.2,
+        }}
+        animate={{
+          y: [0, 20, 0],
+          rotate: [0, -10, 0],
+        }}
+        transition={{
+          duration: 4,
+          repeat: Infinity,
+        }}
+      >
+        💰
+      </motion.div>
+
+      <Container size="4">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <Button
+            onClick={onBack}
+            variant="soft"
+            size="3"
+            style={{
+              color: "#ff6b35",
+              background: "rgba(255, 107, 53, 0.1)",
+              marginBottom: "20px",
+              fontWeight: 600,
+            }}
+          >
+            <ArrowLeft size={20} />
+            Quay lại
+          </Button>
+
+          <Box
+            style={{
+              maxWidth: "1200px",
+              margin: "0 auto",
+              display: "grid",
+              gridTemplateColumns: "minmax(360px, 1fr) minmax(360px, 1fr)",
+              gap: "2rem",
+              alignItems: "start",
+              background: "rgba(255, 255, 255, 0.8)",
+              borderRadius: "36px",
+              padding: "24px",
+              border: "1px solid rgba(255, 167, 123, 0.25)",
+              boxShadow: "0 30px 80px rgba(255, 166, 122, 0.25)",
+            }}
+          >
+            <Box
+              style={{
+                width: "100%",
+                maxWidth: "520px",
+                background: "rgba(255, 255, 255, 0.92)",
+                borderRadius: "28px",
+                padding: "2.2rem",
+                color: "#1f2937",
+                boxShadow: "0 24px 60px rgba(255, 166, 122, 0.2)",
+                border: "1px solid rgba(255, 167, 123, 0.3)",
+                position: "relative",
+                overflow: "hidden",
+              }}
+            >
+              <motion.div
+                animate={{ y: [0, -12, 0] }}
+                transition={{ duration: 7, repeat: Infinity, ease: "easeInOut" }}
+                style={{
+                  position: "absolute",
+                  bottom: "-70px",
+                  right: "-40px",
+                  width: "240px",
+                  height: "240px",
+                  borderRadius: "45%",
+                  background: "rgba(255, 255, 255, 0.18)",
+                  filter: "blur(1px)",
+                }}
+              />
+
+              <Text size="2" weight="medium" style={{ letterSpacing: "0.28em", textTransform: "uppercase", opacity: 0.85, color: "#ff6b35" }}>
+                Nhận lì xì
+              </Text>
+              <Heading size="6" style={{ marginTop: "1rem", lineHeight: 1.2 }}>
+                Chúc mừng năm mới
+              </Heading>
+              <Text size="3" style={{ marginTop: "0.8rem", lineHeight: 1.6, color: "#6b7280" }}>
+                Dán mã chia sẻ để xem trạng thái, mở phong bao và nhận phần thưởng ngay lập tức.
+              </Text>
+
+              <Flex wrap="wrap" gap="2" style={{ marginTop: "1.25rem" }}>
+                {[{
+                  icon: "🔎",
+                  title: "Xem thông tin rõ ràng",
+                }, {
+                  icon: "✨",
+                  title: "Hiệu ứng mở bao",
+                }, {
+                  icon: "💬",
+                  title: "Gửi lời chúc",
+                }].map((item) => (
+                  <Box
+                    key={item.title}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.6rem",
+                      background: "rgba(255, 107, 53, 0.08)",
+                      borderRadius: "12px",
+                      padding: "0.65rem 0.9rem",
+                      color: "#9a3412",
+                    }}
+                  >
+                    <span style={{ fontSize: "1.2rem" }}>{item.icon}</span>
+                    <Text size="2" weight="medium">
+                      {item.title}
+                    </Text>
+                  </Box>
+                ))}
+              </Flex>
+
+              <Box
+                style={{
+                  marginTop: "1.3rem",
+                  padding: "0.8rem 1rem",
+                  borderRadius: "14px",
+                  background: "rgba(255, 107, 53, 0.08)",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "0.35rem",
+                }}
+              >
+                <Text weight="bold" style={{ color: "#9a3412" }}>Lưu ý nhanh</Text>
+                <Text size="2" style={{ color: "#9a3412" }}>
+                  Nếu bao đã hết hạn hoặc hết tiền, bạn vẫn xem được lịch sử để liên hệ người tạo.
+                </Text>
+              </Box>
+            </Box>
+
+            <Box
+              style={{
+                width: "100%",
+                maxWidth: "520px",
+                background: "linear-gradient(135deg, #fff1e6 0%, #ffe3d2 100%)",
+                borderRadius: "28px",
+                padding: "2.2rem",
+                boxShadow: "0 25px 65px rgba(255, 166, 122, 0.25)",
+                border: "1px solid rgba(255, 167, 123, 0.25)",
+              }}
+            >
+              {!searchedLixiId ? (
+                <Flex direction="column" gap="4">
+                  <Box style={{ textAlign: "center" }}>
+                    <motion.div
+                      style={{ fontSize: "56px", marginBottom: "10px" }}
+                      animate={{ scale: [1, 1.1, 1] }}
+                      transition={{ duration: 2, repeat: Infinity }}
+                    >
+                      🧧
+                    </motion.div>
+                    <Heading size="6" style={{ color: "#ff6b35" }}>
+                      Nhập mã bao lì xì
+                    </Heading>
+                    <Text size="2" style={{ color: "#6f6f6f", marginTop: "8px" }}>
+                      Dán mã được chia sẻ để kiểm tra phong bao và nhận phần của bạn.
+                    </Text>
+                  </Box>
+
+                  <Box>
+                    <Text weight="medium" style={{ marginBottom: "8px", display: "block" }}>
+                      Lixi ID
+                    </Text>
+                    <TextField.Root
+                      placeholder="0x..."
+                      value={lixiId}
+                      onChange={(e) => {
+                        if (error) setError("");
+                        setLixiId(e.target.value);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          handleSearchLixi();
+                        }
+                      }}
+                      size="3"
+                    />
+                  </Box>
+
+                  {error && (
+                    <Box style={{
+                      padding: "12px",
+                      background: "rgba(255, 107, 53, 0.08)",
+                      borderRadius: "12px",
+                      border: "1px solid rgba(255, 107, 53, 0.2)",
+                    }}>
+                      <Text size="2" style={{ color: "#c0392b" }}>{error}</Text>
+                    </Box>
+                  )}
+
+                  <Button
+                    onClick={handleSearchLixi}
+                    disabled={isPending && Boolean(searchedLixiId)}
+                    size="4"
+                    style={{
+                      background: "linear-gradient(135deg, #ff6b35 0%, #f7931e 100%)",
+                      fontSize: "18px",
+                      padding: "24px",
+                    }}
+                  >
+                    <Gift size={20} />
+                    Tìm Bao Lì Xì
+                  </Button>
+                </Flex>
+              ) : !claimed ? (
+                <Flex direction="column" gap="3">
+                  <motion.div
+                    style={{
+                      textAlign: "center",
+                      cursor: isActive && !waitingForTxn ? "pointer" : "default",
+                    }}
+                    onClick={() => isActive && !waitingForTxn && handleClaimLixi()}
+                    animate={isShaking ? {
+                      rotate: [0, -5, 5, -5, 5, 0],
+                      scale: [1, 1.05, 1, 1.05, 1],
+                    } : {}}
+                    transition={{ duration: 0.5 }}
+                    whileHover={isActive ? { scale: 1.05 } : {}}
+                  >
+                    <div style={{ fontSize: "100px", marginBottom: "16px" }}>
+                      {isActive ? "🧧" : "📭"}
+                    </div>
+                    <Text size="2" style={{ color: "#6f6f6f" }}>
+                      {isActive ? "Chạm hoặc nhấp để mở" : "Bao lì xì đã đóng"}
+                    </Text>
+                  </motion.div>
+
+                  <Box style={{ textAlign: "center" }}>
+                    <Heading size="6" style={{ color: "#ff6b35" }}>
+                      {message || "Chúc bạn may mắn!"}
+                    </Heading>
+                  </Box>
+
+                  <Flex direction="column" gap="2" style={{
+                    background: "#fff5ec",
+                    padding: "18px",
+                    borderRadius: "16px",
+                    border: "1px solid rgba(255, 107, 53, 0.18)",
+                  }}>
+                    <Flex justify="between" align="center">
+                      <Text size="2">💰 Tổng quỹ ban đầu</Text>
+                      <Text size="3" weight="bold">{totalAmount} SUI</Text>
+                    </Flex>
+                    <Flex justify="between" align="center">
+                      <Text size="2">💸 Số dư còn lại</Text>
+                      <Text size="3" weight="bold" style={{ color: "#ff6b35" }}>
+                        {remainingAmount} SUI
+                      </Text>
+                    </Flex>
+                    <Flex justify="between" align="center">
+                      <Text size="2">👥 Người đã nhận</Text>
+                      <Text size="2" weight="bold">
+                        {claimedCount}/{maxRecipients}
+                      </Text>
+                    </Flex>
+                    <Flex justify="between" align="center">
+                      <Text size="2">🎲 Chế độ</Text>
+                      <Text size="2" weight="bold">{distributionMode}</Text>
+                    </Flex>
+                    <Flex justify="between" align="center">
+                      <Text size="2">⚡ Trạng thái</Text>
+                      <Text size="2" weight="bold" style={{ color: isActive ? "#14a44d" : "#888" }}>
+                        {isActive ? "Đang hoạt động" : "Đã kết thúc"}
+                      </Text>
+                    </Flex>
+                    {timeLeft && (
+                      <Flex justify="between" align="center">
+                        <Text size="2">⏳ Còn lại</Text>
+                        <Text size="2" weight="bold" style={{ color: "#ff6b35" }}>
+                          {timeLeft}
+                        </Text>
+                      </Flex>
+                    )}
+                  </Flex>
+
+                  {error && (
+                    <Box style={{
+                      padding: "12px",
+                      background: "rgba(255, 107, 53, 0.08)",
+                      borderRadius: "12px",
+                      border: "1px solid rgba(255, 107, 53, 0.2)",
+                    }}>
+                      <Text size="2" style={{ color: "#c0392b" }}>{error}</Text>
+                    </Box>
+                  )}
+
+                  <Button
+                    onClick={handleClaimLixi}
+                    disabled={waitingForTxn || !isActive || !currentAccount}
+                    size="4"
+                    style={{
+                      background: isActive
+                        ? "linear-gradient(135deg, #ff6b35 0%, #f7931e 100%)"
+                        : "#d9d9d9",
+                      fontSize: "18px",
+                      padding: "24px",
+                      cursor: isActive && currentAccount ? "pointer" : "not-allowed",
+                    }}
+                  >
+                    {waitingForTxn ? (
+                      <Flex gap="2" align="center" justify="center">
+                        <ClipLoader size={20} color="#fff" />
+                        <span>Đang mở...</span>
+                      </Flex>
+                    ) : isActive ? (
+                      <Flex gap="2" align="center" justify="center">
+                        <Sparkles size={20} />
+                        <span>Mở bao lì xì</span>
+                      </Flex>
+                    ) : (
+                      "Đã hết lượt"
+                    )}
+                  </Button>
+                  {currentAccount?.address === creatorAddress && timeLeft === "Đã hết hạn" && Number(remainingAmount) > 0 && (
+                    <Button
+                      onClick={handleReclaimLixi}
+                      disabled={waitingForTxn}
+                      size="3"
+                      variant="soft"
+                      style={{
+                        borderColor: "rgba(255, 107, 53, 0.4)",
+                        color: "#ff6b35",
+                      }}
+                    >
+                      Hoàn lại số dư còn lại
+                    </Button>
+                  )}
+                </Flex>
+              ) : (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.85 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                >
+                  <Flex direction="column" gap="4" align="center" style={{ textAlign: "center" }}>
+                    <motion.div
+                      style={{ fontSize: "110px" }}
+                      animate={{
+                        scale: [1, 1.2, 1],
+                        rotate: [0, 360],
+                      }}
+                      transition={{ duration: 1 }}
+                    >
+                      🎉
+                    </motion.div>
+                    <Heading size="7" style={{ color: "#ff6b35" }}>
+                      Chúc mừng bạn!
+                    </Heading>
+                    <Box style={{
+                      background: "#fff5ec",
+                      padding: "30px",
+                      borderRadius: "18px",
+                      border: "1px dashed rgba(255, 107, 53, 0.35)",
+                    }}>
+                      <Text size="3">Bạn đã nhận được</Text>
+                      <Heading size="9" style={{ color: "#ff6b35", margin: "16px 0" }}>
+                        {claimedAmount || "?"} SUI
+                      </Heading>
+                      <Text size="2" style={{ color: "#6f6f6f" }}>
+                        💰 Tiền đã được chuyển vào ví của bạn
+                      </Text>
+                    </Box>
+                    <Button
+                      onClick={() => {
+                        setSearchedLixiId("");
+                        setClaimed(false);
+                        setClaimedAmount("");
+                        setLixiId("");
+                      }}
+                      size="3"
+                      variant="soft"
+                      style={{ borderColor: "rgba(255, 107, 53, 0.4)", color: "#ff6b35" }}
+                    >
+                      Mở lì xì khác
+                    </Button>
+                  </Flex>
+                </motion.div>
+              )}
+            </Box>
+          </Box>
+        </motion.div>
+      </Container>
+    </Box>
+  );
+}

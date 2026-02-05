@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🧧 Demo Flow - Tạo và Nhận Lì Xì</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+        }
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #ff0000;
+            text-align: center;
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 40px;
+        }
+        .step {
+            background: #f8f9fa;
+            border-left: 4px solid #ff0000;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+        }
+        .step h2 {
+            margin-top: 0;
+            color: #ff0000;
+        }
+        .step ol {
+            margin: 10px 0;
+        }
+        .step li {
+            margin: 8px 0;
+        }
+        .expected {
+            background: #e7f5ff;
+            border-left: 4px solid #228be6;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .expected h4 {
+            margin-top: 0;
+            color: #228be6;
+        }
+        .url-box {
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: monospace;
+            word-break: break-all;
+            margin: 10px 0;
+        }
+        .button-demo {
+            display: inline-block;
+            background: linear-gradient(135deg, #ff6b35 0%, #f7931e 100%);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 10px;
+            text-decoration: none;
+            font-weight: 600;
+            margin: 10px 5px;
+        }
+        .issue {
+            background: #ffe0e0;
+            border-left: 4px solid #dc3545;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .success {
+            background: #d4edda;
+            border-left: 4px solid #28a745;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .info-box {
+            background: #e3f2fd;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+        .info-box h3 {
+            margin-top: 0;
+            color: #1976d2;
+        }
+        code {
+            background: #f5f5f5;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧧 Demo Flow: Tạo và Nhận Lì Xì</h1>
+        <p class="subtitle">Hướng dẫn test đầy đủ các tính năng</p>
+
+        <div class="info-box">
+            <h3>📍 Thông Tin Hệ Thống</h3>
+            <ul>
+                <li><strong>Frontend:</strong> <a href="http://localhost:5173" target="_blank">http://localhost:5173</a></li>
+                <li><strong>Backend HTTP:</strong> http://localhost:3001</li>
+                <li><strong>Backend WebSocket:</strong> ws://localhost:3002</li>
+                <li><strong>Package ID:</strong> <code>0x66f68179632247de32f089ba2a71fe222144863476fc601cfe8ddb9c61e22dc6</code></li>
+            </ul>
+        </div>
+
+        <div class="step">
+            <h2>🎯 Bước 1: Tạo Lì Xì</h2>
+            <ol>
+                <li>Mở <a href="http://localhost:5173" target="_blank">http://localhost:5173</a></li>
+                <li>Click <strong>"Connect Wallet"</strong> ở góc phải</li>
+                <li>Chọn Sui Wallet và kết nối</li>
+                <li>Click nút <strong>"🧧 Tạo Lì Xì Nhóm"</strong></li>
+                <li>Điền thông tin:
+                    <ul>
+                        <li>Tổng tiền: <code>1</code> SUI</li>
+                        <li>Số người nhận: <code>5</code></li>
+                        <li>Chế độ: <code>🎲 Random</code></li>
+                        <li>Lời chúc: <code>Chúc mừng năm mới! 🎉</code></li>
+                        <li>Hết hạn: <code>24</code> giờ</li>
+                    </ul>
+                </li>
+                <li>Click <strong>"Tạo Bao Lì Xì"</strong></li>
+                <li>Confirm transaction trong Sui Wallet</li>
+            </ol>
+            
+            <div class="expected">
+                <h4>✅ Kết quả mong đợi:</h4>
+                <ul>
+                    <li>Confetti animation (pháo giấy) 🎉</li>
+                    <li>Chuyển sang trang Success</li>
+                    <li>Hiển thị emoji: <strong>🧧</strong></li>
+                    <li>Tiêu đề: <strong>"🧧 Lì Xì Đã Tạo!"</strong></li>
+                    <li>Hiển thị link đầy đủ:</li>
+                </ul>
+                <div class="url-box">
+                    http://localhost:5173/claim-lixi?id=0x1234...abcd
+                </div>
+                <ul>
+                    <li>Hiển thị ID nhỏ bên dưới</li>
+                    <li>2 nút:
+                        <ul>
+                            <li><span class="button-demo">🔗 Copy Link Nhận Lì Xì</span></li>
+                            <li><span class="button-demo">🏠 Về trang chủ</span></li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="step">
+            <h2>📋 Bước 2: Copy Link</h2>
+            <ol>
+                <li>Click nút <strong>"🔗 Copy Link Nhận Lì Xì"</strong></li>
+                <li>Kiểm tra alert xuất hiện</li>
+            </ol>
+            
+            <div class="expected">
+                <h4>✅ Kết quả mong đợi:</h4>
+                <ul>
+                    <li>Alert hiển thị: <strong>"✅ Đã copy link nhận lì xì!"</strong></li>
+                    <li>Clipboard chứa link đầy đủ với query parameter</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="step">
+            <h2>🌐 Bước 3: Mở Link (Tab Mới)</h2>
+            <ol>
+                <li>Mở tab mới hoặc cửa sổ Incognito (Ctrl+Shift+N)</li>
+                <li>Paste link đã copy vào address bar</li>
+                <li>Press Enter</li>
+            </ol>
+            
+            <div class="expected">
+                <h4>✅ Kết quả mong đợi:</h4>
+                <ul>
+                    <li>Tự động chuyển đến trang <strong>Claim Lixi</strong></li>
+                    <li><strong>Lixi ID đã được tự động điền</strong> vào ô input (quan trọng!)</li>
+                    <li>Click nút "Tìm Lì Xì" để load thông tin</li>
+                    <li>Hiển thị:
+                        <ul>
+                            <li>Tổng tiền trong lì xì</li>
+                            <li>Số người đã nhận / Tổng số người</li>
+                            <li>Lời chúc</li>
+                            <li>Thời gian hết hạn</li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="step">
+            <h2>🎁 Bước 4: Nhận Lì Xì</h2>
+            <ol>
+                <li>Connect Sui Wallet (nếu chưa)</li>
+                <li>Click nút <strong>"MỞ BÁO LÌ XÌ"</strong></li>
+                <li>Confirm transaction trong wallet</li>
+                <li>Đợi animation</li>
+            </ol>
+            
+            <div class="expected">
+                <h4>✅ Kết quả mong đợi:</h4>
+                <ul>
+                    <li><strong>Shake animation</strong> - Lì xì rung lắc</li>
+                    <li><strong>Fireworks effect</strong> - Pháo hoa bắn ra 🎆</li>
+                    <li>Hiển thị số tiền nhận được (random)</li>
+                    <li>Toast notification: "🎉 Đã nhận lì xì thành công!"</li>
+                    <li>Balance trong wallet tăng lên</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="step">
+            <h2>🔄 Bước 5: Test So Sánh Gift</h2>
+            <ol>
+                <li>Về trang chủ</li>
+                <li>Click <strong>"🎁 Tạo Gift Mới"</strong></li>
+                <li>Tạo gift thành công</li>
+            </ol>
+            
+            <div class="expected">
+                <h4>✅ Kết quả mong đợi (Khác với Lixi):</h4>
+                <ul>
+                    <li>Emoji: <strong>🎉</strong> (không phải 🧧)</li>
+                    <li>Tiêu đề: <strong>"🎁 Quà Đã Gửi!"</strong> (không phải "Lì Xì Đã Tạo!")</li>
+                    <li>Link: <code>http://localhost:5173/<strong>claim</strong>?id=0x...</code> (không có -lixi)</li>
+                    <li>Nút: <strong>"🔗 Copy Link Nhận Quà"</strong> (không phải "Lì Xì")</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="issue">
+            <h3>🐛 Các Vấn Đề Thường Gặp</h3>
+            <h4>❌ Issue 1: Không thấy trang Success sau khi tạo</h4>
+            <ul>
+                <li><strong>Nguyên nhân:</strong> Transaction chưa được confirm hoặc callback không chạy</li>
+                <li><strong>Kiểm tra:</strong> Mở DevTools Console (F12) → kiểm tra error</li>
+                <li><strong>Fix:</strong> Đợi transaction confirm hoặc check gas</li>
+            </ul>
+
+            <h4>❌ Issue 2: Lixi ID không tự động điền khi mở link</h4>
+            <ul>
+                <li><strong>Nguyên nhân:</strong> Query parameter không được parse đúng</li>
+                <li><strong>Kiểm tra:</strong> URL có chứa <code>?id=0x...</code> không?</li>
+                <li><strong>Fix:</strong> Copy lại link từ trang Success</li>
+            </ul>
+
+            <h4>❌ Issue 3: "No module found with module name sui_lixi"</h4>
+            <ul>
+                <li><strong>Nguyên nhân:</strong> Package ID cũ hoặc chưa publish</li>
+                <li><strong>Fix:</strong> Đã fix - Package ID mới đã được deploy</li>
+            </ul>
+        </div>
+
+        <div class="success">
+            <h3>✅ Xác Nhận Thành Công</h3>
+            <p>Nếu tất cả các bước trên hoạt động đúng, bạn đã test thành công flow:</p>
+            <ul>
+                <li>✅ Tạo Lì Xì → Hiển thị trang Success với link đầy đủ</li>
+                <li>✅ Copy Link → Clipboard chứa link claim</li>
+                <li>✅ Mở Link → Lixi ID tự động điền vào form</li>
+                <li>✅ Nhận Lì Xì → Animation + Balance tăng</li>
+                <li>✅ Phân biệt Gift vs Lixi → Emoji và text khác nhau</li>
+            </ul>
+        </div>
+
+        <div class="info-box">
+            <h3>💡 Tips</h3>
+            <ul>
+                <li>Dùng <strong>Incognito Mode</strong> để test như user khác nhận lì xì</li>
+                <li>Mở <strong>DevTools Console</strong> để debug nếu có lỗi</li>
+                <li>Kiểm tra <strong>Network tab</strong> để xem API calls</li>
+                <li>Test với <strong>nhiều người</strong> claim cùng lúc để xem race condition</li>
+            </ul>
+        </div>
+
+        <p style="text-align: center; margin-top: 40px; color: #999;">
+            <small>Generated by GitHub Copilot - Testing Guide v1.0</small>
+        </p>
+    </div>
+</body>
+</html>
